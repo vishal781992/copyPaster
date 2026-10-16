@@ -11,6 +11,8 @@ struct ClipboardTileView: View {
     let onOpenTerminal: (URL) -> Void
 
     @State private var isHovered = false
+    @State private var justCopied = false
+    @State private var copyToken = 0
 
     private var tileColor: Color {
         switch item.contentType {
@@ -77,7 +79,7 @@ struct ClipboardTileView: View {
                                 .truncationMode(.middle)
                                 .foregroundStyle(.secondary)
                         }
-                        .buttonStyle(.plain)
+                        .buttonStyle(.pressable)
                         .help("Reveal in Finder — \(item.imagePath ?? "")")
                     }
                 case .filePath:
@@ -109,11 +111,15 @@ struct ClipboardTileView: View {
     private var actions: some View {
         GlassEffectContainer(spacing: 6) {
             HStack(spacing: 6) {
-                Button(action: onCopy) {
-                    Image(systemName: "doc.on.doc.fill")
-                        .glassIcon(.blue)
+                Button(action: copyWithFeedback) {
+                    HStack(spacing: 4) {
+                        Image(systemName: justCopied ? "checkmark" : "doc.on.doc.fill")
+                            .contentTransition(.symbolEffect(.replace))
+                        Text(justCopied ? "Copied" : "Copy")
+                    }
+                    .glassPill(justCopied ? .green : .blue)
                 }
-                .buttonStyle(.plain)
+                .buttonStyle(.pressable)
                 .help(item.contentType == .image ? "Copy image" : "Copy to clipboard")
 
                 let urls = item.webURLs
@@ -122,7 +128,7 @@ struct ClipboardTileView: View {
                         Image(systemName: "safari")
                             .glassIcon(.teal)
                     }
-                    .buttonStyle(.plain)
+                    .buttonStyle(.pressable)
                     .help("Open \(url.absoluteString)")
                 } else if urls.count > 1 {
                     Menu {
@@ -145,7 +151,7 @@ struct ClipboardTileView: View {
                         Image(systemName: "terminal")
                             .glassIcon(.gray)
                     }
-                    .buttonStyle(.plain)
+                    .buttonStyle(.pressable)
                     .help("Open Terminal in \(dir.path)")
                 } else if dirs.count > 1 {
                     Menu {
@@ -167,7 +173,7 @@ struct ClipboardTileView: View {
                         Image(systemName: "link")
                             .glassIcon(.purple)
                     }
-                    .buttonStyle(.plain)
+                    .buttonStyle(.pressable)
                     .help("Copy image file path")
                 }
 
@@ -175,16 +181,30 @@ struct ClipboardTileView: View {
                     Image(systemName: item.isPinned ? "pin.fill" : "pin")
                         .glassIcon(.orange, filled: item.isPinned)
                 }
-                .buttonStyle(.plain)
+                .buttonStyle(.pressable)
                 .help(item.isPinned ? "Unpin" : "Pin")
 
                 Button(action: onDelete) {
                     Image(systemName: "trash")
                         .glassIcon(.red)
                 }
-                .buttonStyle(.plain)
+                .buttonStyle(.pressable)
                 .help("Delete")
             }
+        }
+    }
+
+    /// Copies, then flips the button to a green "Copied" for a moment. The token keeps a quick
+    /// second click from being cut short by the first click's reset.
+    private func copyWithFeedback() {
+        onCopy()
+        copyToken += 1
+        let token = copyToken
+        withAnimation(.spring(duration: 0.3)) { justCopied = true }
+        Task {
+            try? await Task.sleep(for: .seconds(1.2))
+            guard token == copyToken else { return }
+            withAnimation(.spring(duration: 0.3)) { justCopied = false }
         }
     }
 

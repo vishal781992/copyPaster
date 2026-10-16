@@ -94,7 +94,7 @@ struct ContentView: View {
                             Image(systemName: "square.and.pencil")
                                 .glassIcon(.accentColor, size: 44, iconSize: 15)
                         }
-                        .buttonStyle(.plain)
+                        .buttonStyle(.pressable)
                         .help("New snippet")
                         .padding(16)
                         .transition(.scale.combined(with: .opacity))
@@ -152,7 +152,7 @@ struct ContentView: View {
                         Image(systemName: "link")
                             .glassIcon(.indigo, size: 28, iconSize: 12)
                     }
-                    .buttonStyle(.plain)
+                    .buttonStyle(.pressable)
                     .help("Open saved Weblinks file")
 
                     // Pause / Resume
@@ -160,14 +160,14 @@ struct ContentView: View {
                         Image(systemName: manager.isPaused ? "play.fill" : "pause.fill")
                             .glassIcon(manager.isPaused ? .orange : .mint, size: 28, iconSize: 12)
                     }
-                    .buttonStyle(.plain)
+                    .buttonStyle(.pressable)
                     .help(manager.isPaused ? "Resume monitoring" : "Pause monitoring")
 
                     Button(action: { showClearConfirmation = true }) {
                         Image(systemName: "trash")
                             .glassIcon(.red, size: 28, iconSize: 12)
                     }
-                    .buttonStyle(.plain)
+                    .buttonStyle(.pressable)
                     .help("Clear all history")
                     .alert("Clear All History?", isPresented: $showClearConfirmation) {
                         Button("Cancel", role: .cancel) {}
@@ -194,7 +194,7 @@ struct ContentView: View {
                     Image(systemName: "xmark.circle.fill")
                         .foregroundStyle(.secondary)
                 }
-                .buttonStyle(.plain)
+                .buttonStyle(.pressable)
                 .help("Clear search")
             }
         }
@@ -227,7 +227,7 @@ struct ContentView: View {
                         .padding(.vertical, 6)
                         .contentShape(Capsule())
                     }
-                    .buttonStyle(.plain)
+                    .buttonStyle(.pressable)
                     .glassEffect(selected ? .regular.tint(Color.accentColor.opacity(0.7)).interactive() : .identity,
                                  in: Capsule())
                     .glassEffectID(selected ? "selection" : filter.rawValue, in: filterGlass)
