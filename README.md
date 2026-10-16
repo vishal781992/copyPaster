@@ -77,3 +77,7 @@ open -n /Applications/copyPaster.app --args -demo YES
 | `DemoData.swift` | Sample items for demo mode |
 
 Pure SwiftUI + AppKit — no third-party dependencies.
+
+## License
+
+MIT — see [LICENSE](LICENSE).
