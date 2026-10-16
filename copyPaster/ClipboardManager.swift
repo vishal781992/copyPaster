@@ -24,6 +24,10 @@ class ClipboardManager {
         .appendingPathComponent("Pictures/Screenshots", isDirectory: true).path
     private static let imageDirectoryKey = "imageSaveDirectory"
 
+    /// Launch with `-demo YES` to show sample items without reading, saving or monitoring the real
+    /// clipboard — used for README screenshots.
+    static let isDemo = UserDefaults.standard.bool(forKey: "demo")
+
     var imageSaveDirectory: URL {
         get {
             let path = UserDefaults.standard.string(forKey: Self.imageDirectoryKey) ?? Self.defaultImageDirectory
@@ -39,6 +43,10 @@ class ClipboardManager {
         let appDir = appSupport.appendingPathComponent("copyPaster", isDirectory: true)
         try? FileManager.default.createDirectory(at: appDir, withIntermediateDirectories: true)
         storageURL = appDir.appendingPathComponent("clipboard_history.json")
+        if Self.isDemo {
+            items = DemoData.items
+            return
+        }
         loadItems()
         lastChangeCount = NSPasteboard.general.changeCount
         // Keep App Nap from throttling the poll timer while we sit in the background
@@ -440,6 +448,7 @@ class ClipboardManager {
     // MARK: - Persistence
 
     private func saveItems() {
+        guard !Self.isDemo else { return }
         do {
             let data = try JSONEncoder().encode(items)
             try data.write(to: storageURL, options: .atomic)

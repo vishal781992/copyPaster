@@ -21,122 +21,39 @@ struct ClipboardTileView: View {
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            HStack(alignment: .top, spacing: 12) {
-                // Content preview
-                Group {
-                    if item.contentType == .text {
+        VStack(alignment: .leading, spacing: 10) {
+            // Content preview
+            Group {
+                if item.contentType == .text {
+                    Text(item.textContent ?? "")
+                        .font(.system(.body, design: .monospaced))
+                        .lineLimit(3)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                } else if item.contentType == .filePath {
+                    HStack(alignment: .top, spacing: 6) {
+                        Image(systemName: (item.fileCount ?? 0) > 1 ? "doc.on.doc.fill" : "doc.fill")
+                            .font(.system(size: 12))
+                            .foregroundStyle(.green)
+                            .padding(.top, 2)
                         Text(item.textContent ?? "")
                             .font(.system(.body, design: .monospaced))
                             .lineLimit(3)
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                    } else if item.contentType == .filePath {
-                        HStack(alignment: .top, spacing: 6) {
-                            Image(systemName: (item.fileCount ?? 0) > 1 ? "doc.on.doc.fill" : "doc.fill")
-                                .font(.system(size: 12))
-                                .foregroundStyle(.green)
-                                .padding(.top, 2)
-                            Text(item.textContent ?? "")
-                                .font(.system(.body, design: .monospaced))
-                                .lineLimit(3)
-                                .foregroundStyle(.primary)
-                                .frame(maxWidth: .infinity, alignment: .leading)
-                        }
-                    } else if let nsImage = item.nsImage {
-                        Image(nsImage: nsImage)
-                            .resizable()
-                            .aspectRatio(contentMode: .fit)
-                            .frame(maxHeight: 80)
-                            .clipShape(RoundedRectangle(cornerRadius: 6))
-                            .onDrag { imageDragProvider() }
-                            .help("Drag into another app")
+                            .foregroundStyle(.primary)
                             .frame(maxWidth: .infinity, alignment: .leading)
                     }
-                }
-
-                // Actions
-                GlassEffectContainer(spacing: 6) {
-                    VStack(spacing: 6) {
-                        Button(action: onCopy) {
-                            Image(systemName: "doc.on.doc.fill")
-                                .glassIcon(.blue)
-                        }
-                        .buttonStyle(.plain)
-                        .help(item.contentType == .image ? "Copy image" : "Copy to clipboard")
-
-                        let urls = item.webURLs
-                        if urls.count == 1, let url = urls.first {
-                            Button { onOpenURL(url) } label: {
-                                Image(systemName: "safari")
-                                    .glassIcon(.teal)
-                            }
-                            .buttonStyle(.plain)
-                            .help("Open \(url.absoluteString)")
-                        } else if urls.count > 1 {
-                            Menu {
-                                ForEach(urls, id: \.self) { url in
-                                    Button(url.absoluteString) { onOpenURL(url) }
-                                }
-                            } label: {
-                                Image(systemName: "safari")
-                                    .glassIcon(.teal)
-                            }
-                            .menuStyle(.borderlessButton)
-                            .menuIndicator(.hidden)
-                            .fixedSize()
-                            .help("Open a link (\(urls.count) found)")
-                        }
-
-                        let dirs = item.terminalDirectories
-                        if dirs.count == 1, let dir = dirs.first {
-                            Button { onOpenTerminal(dir) } label: {
-                                Image(systemName: "terminal")
-                                    .glassIcon(.black)
-                            }
-                            .buttonStyle(.plain)
-                            .help("Open Terminal in \(dir.path)")
-                        } else if dirs.count > 1 {
-                            Menu {
-                                ForEach(dirs, id: \.self) { dir in
-                                    Button(dir.path) { onOpenTerminal(dir) }
-                                }
-                            } label: {
-                                Image(systemName: "terminal")
-                                    .glassIcon(.black)
-                            }
-                            .menuStyle(.borderlessButton)
-                            .menuIndicator(.hidden)
-                            .fixedSize()
-                            .help("Open Terminal in a folder (\(dirs.count) found)")
-                        }
-
-                        if item.contentType == .image {
-                            Button(action: onCopyPath) {
-                                Image(systemName: "link")
-                                    .glassIcon(.purple)
-                            }
-                            .buttonStyle(.plain)
-                            .help("Copy image file path")
-                        }
-
-                        Button(action: onTogglePin) {
-                            Image(systemName: item.isPinned ? "pin.fill" : "pin")
-                                .glassIcon(.orange, filled: item.isPinned)
-                        }
-                        .buttonStyle(.plain)
-                        .help(item.isPinned ? "Unpin" : "Pin")
-
-                        Button(action: onDelete) {
-                            Image(systemName: "trash")
-                                .glassIcon(.red)
-                        }
-                        .buttonStyle(.plain)
-                        .help("Delete")
-                    }
+                } else if let nsImage = item.nsImage {
+                    Image(nsImage: nsImage)
+                        .resizable()
+                        .aspectRatio(contentMode: .fit)
+                        .frame(maxHeight: 80)
+                        .clipShape(RoundedRectangle(cornerRadius: 6))
+                        .onDrag { imageDragProvider() }
+                        .help("Drag into another app")
+                        .frame(maxWidth: .infinity, alignment: .leading)
                 }
             }
 
-            // Metadata row — below content, never overlaps actions
+            // Metadata on the left, actions on the right — keeps short items compact
             HStack(spacing: 4) {
                 switch item.contentType {
                 case .text:
@@ -170,10 +87,14 @@ struct ClipboardTileView: View {
                             .foregroundStyle(.secondary)
                     }
                 }
-                Spacer()
+                Text("·")
+                    .font(.caption2)
+                    .foregroundStyle(.tertiary)
                 Text(item.timestamp, style: .relative)
                     .font(.caption2)
                     .foregroundStyle(.tertiary)
+                Spacer(minLength: 8)
+                actions
             }
         }
         .padding(12)
@@ -183,6 +104,88 @@ struct ClipboardTileView: View {
         .scaleEffect(isHovered ? 1.01 : 1)
         .animation(.spring(duration: 0.25), value: isHovered)
         .onHover { isHovered = $0 }
+    }
+
+    private var actions: some View {
+        GlassEffectContainer(spacing: 6) {
+            HStack(spacing: 6) {
+                Button(action: onCopy) {
+                    Image(systemName: "doc.on.doc.fill")
+                        .glassIcon(.blue)
+                }
+                .buttonStyle(.plain)
+                .help(item.contentType == .image ? "Copy image" : "Copy to clipboard")
+
+                let urls = item.webURLs
+                if urls.count == 1, let url = urls.first {
+                    Button { onOpenURL(url) } label: {
+                        Image(systemName: "safari")
+                            .glassIcon(.teal)
+                    }
+                    .buttonStyle(.plain)
+                    .help("Open \(url.absoluteString)")
+                } else if urls.count > 1 {
+                    Menu {
+                        ForEach(urls, id: \.self) { url in
+                            Button(url.absoluteString) { onOpenURL(url) }
+                        }
+                    } label: {
+                        Image(systemName: "safari")
+                            .glassIcon(.teal)
+                    }
+                    .menuStyle(.borderlessButton)
+                    .menuIndicator(.hidden)
+                    .fixedSize()
+                    .help("Open a link (\(urls.count) found)")
+                }
+
+                let dirs = item.terminalDirectories
+                if dirs.count == 1, let dir = dirs.first {
+                    Button { onOpenTerminal(dir) } label: {
+                        Image(systemName: "terminal")
+                            .glassIcon(.gray)
+                    }
+                    .buttonStyle(.plain)
+                    .help("Open Terminal in \(dir.path)")
+                } else if dirs.count > 1 {
+                    Menu {
+                        ForEach(dirs, id: \.self) { dir in
+                            Button(dir.path) { onOpenTerminal(dir) }
+                        }
+                    } label: {
+                        Image(systemName: "terminal")
+                            .glassIcon(.gray)
+                    }
+                    .menuStyle(.borderlessButton)
+                    .menuIndicator(.hidden)
+                    .fixedSize()
+                    .help("Open Terminal in a folder (\(dirs.count) found)")
+                }
+
+                if item.contentType == .image {
+                    Button(action: onCopyPath) {
+                        Image(systemName: "link")
+                            .glassIcon(.purple)
+                    }
+                    .buttonStyle(.plain)
+                    .help("Copy image file path")
+                }
+
+                Button(action: onTogglePin) {
+                    Image(systemName: item.isPinned ? "pin.fill" : "pin")
+                        .glassIcon(.orange, filled: item.isPinned)
+                }
+                .buttonStyle(.plain)
+                .help(item.isPinned ? "Unpin" : "Pin")
+
+                Button(action: onDelete) {
+                    Image(systemName: "trash")
+                        .glassIcon(.red)
+                }
+                .buttonStyle(.plain)
+                .help("Delete")
+            }
+        }
     }
 
     /// Prefers the on-disk file so targets like Finder and Mail receive a real file with its name;
