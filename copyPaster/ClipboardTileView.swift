@@ -47,6 +47,8 @@ struct ClipboardTileView: View {
                             .aspectRatio(contentMode: .fit)
                             .frame(maxHeight: 80)
                             .clipShape(RoundedRectangle(cornerRadius: 6))
+                            .onDrag { imageDragProvider() }
+                            .help("Drag into another app")
                             .frame(maxWidth: .infinity, alignment: .leading)
                     }
                 }
@@ -169,4 +171,16 @@ struct ClipboardTileView: View {
         .onHover { isHovered = $0 }
     }
 
+    /// Prefers the on-disk file so targets like Finder and Mail receive a real file with its name;
+    /// falls back to the in-memory image when the file has been moved or deleted.
+    private func imageDragProvider() -> NSItemProvider {
+        if item.imageFileExists, let path = item.imagePath,
+           let provider = NSItemProvider(contentsOf: URL(fileURLWithPath: path)) {
+            return provider
+        }
+        if let image = item.nsImage {
+            return NSItemProvider(object: image)
+        }
+        return NSItemProvider()
+    }
 }
