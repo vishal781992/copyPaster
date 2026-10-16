@@ -6,10 +6,9 @@ struct ToastView: View {
     var body: some View {
         Text(message)
             .font(.caption)
-            .fontWeight(.medium)
+            .fontWeight(.semibold)
             .padding(.horizontal, 16)
             .padding(.vertical, 8)
-            .background(.ultraThinMaterial, in: Capsule())
-            .shadow(color: .black.opacity(0.1), radius: 4, y: 2)
+            .glassEffect(.regular, in: Capsule())
     }
 }

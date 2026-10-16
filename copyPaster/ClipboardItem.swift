@@ -43,6 +43,34 @@ struct ClipboardItem: Identifiable, Codable, Equatable {
         return text.components(separatedBy: "\n").filter { !$0.isEmpty }.count
     }
 
+    /// Folders a Terminal can be opened in: each copied file's folder (or the folder itself),
+    /// or a text item that is just an existing path such as `pwd` output. No duplicates, missing paths skipped.
+    var terminalDirectories: [URL] {
+        let paths: [String]
+        switch contentType {
+        case .filePath:
+            paths = (textContent ?? "").components(separatedBy: "\n")
+        case .text:
+            let trimmed = (textContent ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+            guard trimmed.hasPrefix("/") || trimmed.hasPrefix("~"), !trimmed.contains("\n") else { return [] }
+            paths = [trimmed]
+        case .image:
+            return []
+        }
+        var seen = Set<String>()
+        var dirs: [URL] = []
+        for raw in paths where !raw.isEmpty {
+            let path = (raw as NSString).expandingTildeInPath
+            var isDir: ObjCBool = false
+            guard FileManager.default.fileExists(atPath: path, isDirectory: &isDir) else { continue }
+            let dir = isDir.boolValue ? URL(fileURLWithPath: path) : URL(fileURLWithPath: path).deletingLastPathComponent()
+            if seen.insert(dir.path).inserted {
+                dirs.append(dir)
+            }
+        }
+        return dirs
+    }
+
     /// http(s) links found in a text item, in order of appearance, without duplicates.
     var webURLs: [URL] {
         guard contentType == .text, let text = textContent else { return [] }

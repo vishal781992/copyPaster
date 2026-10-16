@@ -34,54 +34,138 @@ struct ContentView: View {
         return result
     }
 
+    @Namespace private var filterGlass
+
+    private func count(for filter: ClipboardFilter) -> Int {
+        switch filter {
+        case .all:       return manager.items.count
+        case .text:      return manager.items.filter { $0.contentType == .text }.count
+        case .images:    return manager.items.filter { $0.contentType == .image }.count
+        case .filePaths: return manager.items.filter { $0.contentType == .filePath }.count
+        }
+    }
+
     var body: some View {
         ZStack(alignment: .top) {
-            VStack(spacing: 0) {
-                // Header
-                HStack {
-                    Text("CopyPaster")
-                        .font(.title2)
-                        .fontWeight(.semibold)
-                    Text(AppVersion.display)
-                        .font(.caption2)
-                        .fontWeight(.medium)
-                        .foregroundStyle(.secondary)
-                        .padding(.horizontal, 5)
-                        .padding(.vertical, 2)
-                        .background(.quaternary, in: Capsule())
-                        .help("Build \(AppVersion.build)")
-                    if manager.isPaused {
-                        Text("Paused")
-                            .font(.caption2)
-                            .fontWeight(.medium)
-                            .foregroundStyle(.white)
-                            .padding(.horizontal, 6)
-                            .padding(.vertical, 2)
-                            .background(.orange, in: Capsule())
+            // Soft color wash behind everything so the glass has something to refract.
+            LinearGradient(
+                colors: [Color.indigo.opacity(0.16), Color.teal.opacity(0.08), Color.orange.opacity(0.10)],
+                startPoint: .topLeading, endPoint: .bottomTrailing
+            )
+            .ignoresSafeArea()
+
+            VStack(spacing: 10) {
+                header
+                searchField
+                filterBar
+
+                // Tiles list with FAB overlay
+                ZStack(alignment: .bottomTrailing) {
+                    if filteredItems.isEmpty {
+                        emptyState
+                    } else {
+                        ScrollView {
+                            LazyVStack(spacing: 10) {
+                                ForEach(filteredItems) { item in
+                                    ClipboardTileView(
+                                        item: item,
+                                        onCopy: { manager.copyToClipboard(item) },
+                                        onCopyPath: { manager.copyImagePath(item) },
+                                        onRevealInFinder: { manager.revealImageInFinder(item) },
+                                        onDelete: { withAnimation(.easeOut(duration: 0.2)) { manager.deleteItem(item) } },
+                                        onTogglePin: { withAnimation(.easeInOut(duration: 0.2)) { manager.togglePin(item) } },
+                                        onOpenURL: { manager.openURL($0) },
+                                        onOpenTerminal: { manager.openTerminal(at: $0) }
+                                    )
+                                }
+                            }
+                            .padding(.horizontal, 14)
+                            .padding(.top, 2)
+                            .padding(.bottom, showAddText ? 12 : 68)
+                        }
+                        .scrollIndicators(.never)
                     }
-                    Spacer()
+
+                    // FAB
+                    if !showAddText {
+                        Button {
+                            withAnimation(.spring(duration: 0.3)) { showAddText = true }
+                        } label: {
+                            Image(systemName: "square.and.pencil")
+                                .glassIcon(.accentColor, size: 44, iconSize: 15)
+                        }
+                        .buttonStyle(.plain)
+                        .help("New snippet")
+                        .padding(16)
+                        .transition(.scale.combined(with: .opacity))
+                    }
+                }
+
+                // Compose panel
+                if showAddText {
+                    AddTextView(isShowing: $showAddText)
+                        .padding(.horizontal, 12)
+                        .padding(.bottom, 12)
+                        .transition(.move(edge: .bottom).combined(with: .opacity))
+                }
+            }
+
+            // Toast overlay
+            if manager.showToast {
+                ToastView(message: manager.toastMessage)
+                    .transition(.move(edge: .top).combined(with: .opacity))
+                    .padding(.top, 6)
+                    .animation(.easeInOut(duration: 0.3), value: manager.showToast)
+            }
+        }
+        .frame(minWidth: 360, minHeight: 480)
+    }
+
+    private var header: some View {
+        HStack(spacing: 8) {
+            Text("CopyPaster")
+                .font(.title2)
+                .fontWeight(.bold)
+            Text(AppVersion.display)
+                .font(.caption2)
+                .fontWeight(.semibold)
+                .foregroundStyle(.secondary)
+                .padding(.horizontal, 7)
+                .padding(.vertical, 3)
+                .glassEffect(.regular, in: Capsule())
+                .help("Build \(AppVersion.build)")
+            if manager.isPaused {
+                Text("Paused")
+                    .font(.caption2)
+                    .fontWeight(.semibold)
+                    .foregroundStyle(.white)
+                    .padding(.horizontal, 7)
+                    .padding(.vertical, 3)
+                    .glassEffect(.regular.tint(.orange.opacity(0.7)), in: Capsule())
+                    .transition(.scale.combined(with: .opacity))
+            }
+            Spacer()
+
+            GlassEffectContainer(spacing: 8) {
+                HStack(spacing: 8) {
                     Button(action: { manager.openWeblinksFile() }) {
-                        Image(systemName: "link.circle")
-                            .font(.title3)
-                            .foregroundStyle(.secondary)
+                        Image(systemName: "link")
+                            .glassIcon(.indigo, size: 28, iconSize: 12)
                     }
                     .buttonStyle(.plain)
                     .help("Open saved Weblinks file")
 
                     // Pause / Resume
-                    Button(action: { manager.togglePause() }) {
-                        Image(systemName: manager.isPaused ? "play.circle.fill" : "pause.circle")
-                            .font(.title3)
-                            .foregroundStyle(manager.isPaused ? .orange : .secondary)
+                    Button(action: { withAnimation(.spring(duration: 0.3)) { manager.togglePause() } }) {
+                        Image(systemName: manager.isPaused ? "play.fill" : "pause.fill")
+                            .glassIcon(manager.isPaused ? .orange : .mint, size: 28, iconSize: 12)
                     }
                     .buttonStyle(.plain)
                     .help(manager.isPaused ? "Resume monitoring" : "Pause monitoring")
-                    .animation(.easeInOut(duration: 0.2), value: manager.isPaused)
 
                     Button(action: { showClearConfirmation = true }) {
-                        Text("Clear All")
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
+                        Image(systemName: "trash")
+                            .glassIcon(.red, size: 28, iconSize: 12)
                     }
                     .buttonStyle(.plain)
                     .help("Clear all history")
@@ -92,113 +176,85 @@ struct ContentView: View {
                         Text("This will delete all clipboard items. Pinned items will also be removed.")
                     }
                 }
-                .padding(.horizontal, 16)
-                .padding(.top, 12)
-                .padding(.bottom, 8)
-
-                // Search bar
-                HStack(spacing: 8) {
-                    Image(systemName: "magnifyingglass")
-                        .foregroundStyle(.secondary)
-                    TextField("Search clipboard...", text: $searchText)
-                        .textFieldStyle(.plain)
-                        .font(.body)
-                }
-                .padding(8)
-                .background(Color(nsColor: .controlBackgroundColor), in: RoundedRectangle(cornerRadius: 8))
-                .padding(.horizontal, 16)
-
-                // Category tabs
-                Picker("Filter", selection: $selectedFilter) {
-                    ForEach(ClipboardFilter.allCases, id: \.self) { filter in
-                        Text(filter.rawValue).tag(filter)
-                    }
-                }
-                .pickerStyle(.segmented)
-                .padding(.horizontal, 16)
-                .padding(.vertical, 8)
-
-                // Item count
-                HStack {
-                    Text("\(filteredItems.count) items")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                    Spacer()
-                }
-                .padding(.horizontal, 16)
-                .padding(.bottom, 4)
-
-                // Tiles list with FAB overlay
-                ZStack(alignment: .bottomTrailing) {
-                    if filteredItems.isEmpty {
-                        VStack {
-                            Spacer()
-                            VStack(spacing: 8) {
-                                Image(systemName: "clipboard")
-                                    .font(.system(size: 40))
-                                    .foregroundStyle(.quaternary)
-                                Text("No items yet")
-                                    .font(.body)
-                                    .foregroundStyle(.secondary)
-                                Text("Copy something and it'll appear here")
-                                    .font(.caption)
-                                    .foregroundStyle(.tertiary)
-                            }
-                            Spacer()
-                        }
-                        .frame(maxWidth: .infinity)
-                    } else {
-                        ScrollView {
-                            LazyVStack(spacing: 8) {
-                                ForEach(filteredItems) { item in
-                                    ClipboardTileView(
-                                        item: item,
-                                        onCopy: { manager.copyToClipboard(item) },
-                                        onCopyPath: { manager.copyImagePath(item) },
-                                        onRevealInFinder: { manager.revealImageInFinder(item) },
-                                        onDelete: { withAnimation(.easeOut(duration: 0.2)) { manager.deleteItem(item) } },
-                                        onTogglePin: { withAnimation(.easeInOut(duration: 0.2)) { manager.togglePin(item) } },
-                                        onOpenURL: { manager.openURL($0) }
-                                    )
-                                }
-                            }
-                            .padding(.horizontal, 16)
-                            .padding(.bottom, showAddText ? 12 : 64)
-                        }
-                    }
-
-                    // FAB
-                    Button {
-                        withAnimation(.spring(duration: 0.3)) { showAddText.toggle() }
-                    } label: {
-                        Image(systemName: showAddText ? "xmark" : "square.and.pencil")
-                            .font(.system(size: 13, weight: .semibold))
-                            .foregroundStyle(.white)
-                            .frame(width: 36, height: 36)
-                            .background(showAddText ? Color(nsColor: .tertiaryLabelColor) : Color.accentColor, in: Circle())
-                            .shadow(color: showAddText ? .clear : Color.accentColor.opacity(0.4), radius: 8, y: 3)
-                    }
-                    .buttonStyle(.plain)
-                    .padding(14)
-                    .animation(.spring(duration: 0.25), value: showAddText)
-                }
-
-                // Compose panel
-                if showAddText {
-                    AddTextView(isShowing: $showAddText)
-                        .transition(.move(edge: .bottom).combined(with: .opacity))
-                }
-            }
-
-            // Toast overlay
-            if manager.showToast {
-                ToastView(message: manager.toastMessage)
-                    .transition(.move(edge: .top).combined(with: .opacity))
-                    .padding(.top, 4)
-                    .animation(.easeInOut(duration: 0.3), value: manager.showToast)
             }
         }
-        .frame(minWidth: 360, minHeight: 480)
+        .padding(.horizontal, 16)
+        .padding(.top, 14)
+    }
+
+    private var searchField: some View {
+        HStack(spacing: 8) {
+            Image(systemName: "magnifyingglass")
+                .foregroundStyle(.secondary)
+            TextField("Search clipboard...", text: $searchText)
+                .textFieldStyle(.plain)
+                .font(.body)
+            if !searchText.isEmpty {
+                Button { searchText = "" } label: {
+                    Image(systemName: "xmark.circle.fill")
+                        .foregroundStyle(.secondary)
+                }
+                .buttonStyle(.plain)
+                .help("Clear search")
+            }
+        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 9)
+        .glassEffect(.regular, in: Capsule())
+        .overlay(Capsule().strokeBorder(.white.opacity(0.18), lineWidth: 1))
+        .padding(.horizontal, 14)
+    }
+
+    /// Glass segmented control: the selected pill is one glass shape that morphs between tabs.
+    private var filterBar: some View {
+        GlassEffectContainer(spacing: 4) {
+            HStack(spacing: 4) {
+                ForEach(ClipboardFilter.allCases, id: \.self) { filter in
+                    let selected = filter == selectedFilter
+                    Button {
+                        withAnimation(.spring(duration: 0.35, bounce: 0.2)) { selectedFilter = filter }
+                    } label: {
+                        HStack(spacing: 4) {
+                            Text(filter.rawValue)
+                            Text("\(count(for: filter))")
+                                .monospacedDigit()
+                                .foregroundStyle(selected ? Color.white.opacity(0.8) : Color.secondary)
+                        }
+                        .font(.caption)
+                        .fontWeight(.semibold)
+                        .foregroundStyle(selected ? Color.white : Color.primary)
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 6)
+                        .contentShape(Capsule())
+                    }
+                    .buttonStyle(.plain)
+                    .glassEffect(selected ? .regular.tint(Color.accentColor.opacity(0.7)).interactive() : .identity,
+                                 in: Capsule())
+                    .glassEffectID(selected ? "selection" : filter.rawValue, in: filterGlass)
+                }
+            }
+            .padding(3)
+            .glassEffect(.regular, in: Capsule())
+        }
+        .padding(.horizontal, 14)
+    }
+
+    private var emptyState: some View {
+        VStack(spacing: 10) {
+            Spacer()
+            Image(systemName: "clipboard")
+                .font(.system(size: 32, weight: .medium))
+                .foregroundStyle(.secondary)
+                .frame(width: 72, height: 72)
+                .glassEffect(.regular, in: Circle())
+            Text("No items yet")
+                .font(.headline)
+            Text("Copy something and it'll appear here")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+            Spacer()
+        }
+        .frame(maxWidth: .infinity)
     }
 }
 

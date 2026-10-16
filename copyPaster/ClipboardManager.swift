@@ -221,6 +221,23 @@ class ClipboardManager {
         NSWorkspace.shared.activateFileViewerSelecting([URL(fileURLWithPath: path)])
     }
 
+    func openTerminal(at directory: URL) {
+        guard FileManager.default.fileExists(atPath: directory.path) else {
+            triggerToast("Folder no longer exists")
+            return
+        }
+        guard let terminal = NSWorkspace.shared.urlForApplication(withBundleIdentifier: "com.apple.Terminal") else {
+            triggerToast("Terminal not found")
+            return
+        }
+        // Opening a folder with Terminal starts a new window with that folder as the working directory.
+        NSWorkspace.shared.open([directory], withApplicationAt: terminal, configuration: NSWorkspace.OpenConfiguration()) { _, error in
+            guard let error else { return }
+            print("Failed to open Terminal at \(directory.path): \(error)")
+            Task { @MainActor in ClipboardManager.shared.triggerToast("Couldn't open Terminal") }
+        }
+    }
+
     /// Writes PNG data into imageSaveDirectory, returning the absolute path (nil on failure).
     @discardableResult
     private func writeImageToDisk(_ png: Data, date: Date = Date()) -> String? {
@@ -255,40 +272,105 @@ class ClipboardManager {
 
     // MARK: - Weblinks
 
-    /// Every http(s) link copied gets appended here, so it survives clearing or trimming the history.
+    /// Every http(s) link copied gets recorded here, so it survives clearing or trimming the history.
+    /// HTML so the links are clickable — it opens in the browser.
     static let weblinksFileURL = FileManager.default.homeDirectoryForCurrentUser
         .appendingPathComponent("Documents", isDirectory: true)
-        .appendingPathComponent("Weblinks.md")
+        .appendingPathComponent("Weblinks.html")
 
-    /// Appends links from copied text to the Weblinks file, skipping ones already in it.
+    /// Earlier versions wrote a Markdown file; its entries are imported once when the HTML file doesn't exist yet.
+    private static let legacyWeblinksFileURL = weblinksFileURL
+        .deletingPathExtension().appendingPathExtension("md")
+
+    private struct WeblinkEntry {
+        let stamp: String
+        let url: String
+    }
+
+    /// Records links from copied text in the Weblinks file, newest first, skipping ones already in it.
     private func recordWeblinks(in text: String) {
         let urls = ClipboardItem.extractWebURLs(from: text)
         guard !urls.isEmpty else { return }
 
         let fileURL = Self.weblinksFileURL
-        let existing = (try? String(contentsOf: fileURL, encoding: .utf8)) ?? ""
-        let known = Set(existing.split(separator: "\n").compactMap { line -> String? in
-            // Entries look like "- 2026-10-09 14:32 — <url>"
-            line.components(separatedBy: " — ").last.map { String($0).trimmingCharacters(in: .whitespaces) }
-        })
+        let entries = loadWeblinkEntries()
+        let known = Set(entries.map(\.url))
         let newURLs = urls.filter { !known.contains($0.absoluteString) }
         guard !newURLs.isEmpty else { return }
 
         let formatter = DateFormatter()
         formatter.dateFormat = "yyyy-MM-dd HH:mm"
         let stamp = formatter.string(from: Date())
-        var output = existing.isEmpty ? "# Weblinks\n\nLinks copied with CopyPaster, oldest first.\n\n" : existing
-        if !output.hasSuffix("\n") { output += "\n" }
-        for url in newURLs {
-            output += "- \(stamp) — \(url.absoluteString)\n"
-        }
+        // Within one copy, keep the links in the order they appeared in the text.
+        let added = newURLs.map { WeblinkEntry(stamp: stamp, url: $0.absoluteString) }
 
         do {
             try FileManager.default.createDirectory(at: fileURL.deletingLastPathComponent(), withIntermediateDirectories: true)
-            try output.write(to: fileURL, atomically: true, encoding: .utf8)
+            try renderWeblinks(added + entries).write(to: fileURL, atomically: true, encoding: .utf8)
         } catch {
             print("Failed to write weblinks to \(fileURL.path): \(error)")
         }
+    }
+
+    /// Entries in file order (newest first). Reads the legacy Markdown file (oldest first) if there's no HTML file yet.
+    private func loadWeblinkEntries() -> [WeblinkEntry] {
+        if let html = try? String(contentsOf: Self.weblinksFileURL, encoding: .utf8) {
+            // Entry lines look like: <li><span class="t">2026-10-09 14:32</span> <a href="…" …>…</a></li>
+            let regex = /<li><span class="t">([^<]*)<\/span> <a href="([^"]*)"/
+            return html.split(separator: "\n").compactMap { line in
+                guard let m = line.firstMatch(of: regex) else { return nil }
+                return WeblinkEntry(stamp: String(m.1), url: Self.unescapeHTML(String(m.2)))
+            }
+        }
+        guard let md = try? String(contentsOf: Self.legacyWeblinksFileURL, encoding: .utf8) else { return [] }
+        // Entries look like "- 2026-10-09 14:32 — <url>"
+        let entries: [WeblinkEntry] = md.split(separator: "\n").compactMap { line in
+            guard line.hasPrefix("- ") else { return nil }
+            let parts = line.dropFirst(2).components(separatedBy: " — ")
+            guard parts.count == 2 else { return nil }
+            return WeblinkEntry(stamp: parts[0].trimmingCharacters(in: .whitespaces),
+                                url: parts[1].trimmingCharacters(in: .whitespaces))
+        }
+        return entries.reversed()
+    }
+
+    private func renderWeblinks(_ entries: [WeblinkEntry]) -> String {
+        var html = """
+        <!doctype html>
+        <html><head><meta charset="utf-8"><title>Weblinks</title>
+        <style>
+        :root { color-scheme: light dark; }
+        body { font: 14px -apple-system, system-ui, sans-serif; max-width: 860px; margin: 32px auto; padding: 0 16px; }
+        p { color: GrayText; }
+        ul { list-style: none; padding: 0; }
+        li { padding: 6px 0; border-bottom: 1px solid color-mix(in srgb, CanvasText 10%, transparent); overflow-wrap: anywhere; }
+        .t { color: GrayText; font-variant-numeric: tabular-nums; margin-right: 8px; }
+        </style></head><body>
+        <h1>Weblinks</h1>
+        <p>Links copied with CopyPaster, newest first.</p>
+        <ul>
+
+        """
+        for entry in entries {
+            let url = Self.escapeHTML(entry.url)
+            html += "<li><span class=\"t\">\(Self.escapeHTML(entry.stamp))</span> <a href=\"\(url)\" target=\"_blank\">\(url)</a></li>\n"
+        }
+        html += "</ul>\n</body></html>\n"
+        return html
+    }
+
+    private static func escapeHTML(_ s: String) -> String {
+        s.replacingOccurrences(of: "&", with: "&amp;")
+            .replacingOccurrences(of: "\"", with: "&quot;")
+            .replacingOccurrences(of: "<", with: "&lt;")
+            .replacingOccurrences(of: ">", with: "&gt;")
+    }
+
+    private static func unescapeHTML(_ s: String) -> String {
+        s.replacingOccurrences(of: "&quot;", with: "\"")
+            .replacingOccurrences(of: "&lt;", with: "<")
+            .replacingOccurrences(of: "&gt;", with: ">")
+            .replacingOccurrences(of: "&amp;", with: "&")
     }
 
     func openURL(_ url: URL) {
@@ -297,6 +379,12 @@ class ClipboardManager {
 
     func openWeblinksFile() {
         let fileURL = Self.weblinksFileURL
+        if !FileManager.default.fileExists(atPath: fileURL.path) {
+            let legacy = loadWeblinkEntries()
+            if !legacy.isEmpty {
+                try? renderWeblinks(legacy).write(to: fileURL, atomically: true, encoding: .utf8)
+            }
+        }
         guard FileManager.default.fileExists(atPath: fileURL.path) else {
             triggerToast("No links saved yet")
             return

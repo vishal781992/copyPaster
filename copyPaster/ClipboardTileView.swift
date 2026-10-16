@@ -8,6 +8,7 @@ struct ClipboardTileView: View {
     let onDelete: () -> Void
     let onTogglePin: () -> Void
     let onOpenURL: (URL) -> Void
+    let onOpenTerminal: (URL) -> Void
 
     @State private var isHovered = false
 
@@ -54,67 +55,84 @@ struct ClipboardTileView: View {
                 }
 
                 // Actions
-                VStack(spacing: 8) {
-                    Button(action: onCopy) {
-                        Image(systemName: "doc.on.doc.fill")
-                            .font(.system(size: 14))
-                            .foregroundStyle(.blue)
-                    }
-                    .buttonStyle(.plain)
-                    .help(item.contentType == .image ? "Copy image" : "Copy to clipboard")
-
-                    let urls = item.webURLs
-                    if urls.count == 1, let url = urls.first {
-                        Button { onOpenURL(url) } label: {
-                            Image(systemName: "safari")
-                                .font(.system(size: 14))
-                                .foregroundStyle(.teal)
+                GlassEffectContainer(spacing: 6) {
+                    VStack(spacing: 6) {
+                        Button(action: onCopy) {
+                            Image(systemName: "doc.on.doc.fill")
+                                .glassIcon(.blue)
                         }
                         .buttonStyle(.plain)
-                        .help("Open \(url.absoluteString)")
-                    } else if urls.count > 1 {
-                        Menu {
-                            ForEach(urls, id: \.self) { url in
-                                Button(url.absoluteString) { onOpenURL(url) }
+                        .help(item.contentType == .image ? "Copy image" : "Copy to clipboard")
+
+                        let urls = item.webURLs
+                        if urls.count == 1, let url = urls.first {
+                            Button { onOpenURL(url) } label: {
+                                Image(systemName: "safari")
+                                    .glassIcon(.teal)
                             }
-                        } label: {
-                            Image(systemName: "safari")
-                                .font(.system(size: 14))
-                                .foregroundStyle(.teal)
+                            .buttonStyle(.plain)
+                            .help("Open \(url.absoluteString)")
+                        } else if urls.count > 1 {
+                            Menu {
+                                ForEach(urls, id: \.self) { url in
+                                    Button(url.absoluteString) { onOpenURL(url) }
+                                }
+                            } label: {
+                                Image(systemName: "safari")
+                                    .glassIcon(.teal)
+                            }
+                            .menuStyle(.borderlessButton)
+                            .menuIndicator(.hidden)
+                            .fixedSize()
+                            .help("Open a link (\(urls.count) found)")
                         }
-                        .menuStyle(.borderlessButton)
-                        .menuIndicator(.hidden)
-                        .fixedSize()
-                        .help("Open a link (\(urls.count) found)")
-                    }
 
-                    if item.contentType == .image {
-                        Button(action: onCopyPath) {
-                            Image(systemName: "link")
-                                .font(.system(size: 13))
-                                .foregroundStyle(.purple)
+                        let dirs = item.terminalDirectories
+                        if dirs.count == 1, let dir = dirs.first {
+                            Button { onOpenTerminal(dir) } label: {
+                                Image(systemName: "terminal")
+                                    .glassIcon(.black)
+                            }
+                            .buttonStyle(.plain)
+                            .help("Open Terminal in \(dir.path)")
+                        } else if dirs.count > 1 {
+                            Menu {
+                                ForEach(dirs, id: \.self) { dir in
+                                    Button(dir.path) { onOpenTerminal(dir) }
+                                }
+                            } label: {
+                                Image(systemName: "terminal")
+                                    .glassIcon(.black)
+                            }
+                            .menuStyle(.borderlessButton)
+                            .menuIndicator(.hidden)
+                            .fixedSize()
+                            .help("Open Terminal in a folder (\(dirs.count) found)")
+                        }
+
+                        if item.contentType == .image {
+                            Button(action: onCopyPath) {
+                                Image(systemName: "link")
+                                    .glassIcon(.purple)
+                            }
+                            .buttonStyle(.plain)
+                            .help("Copy image file path")
+                        }
+
+                        Button(action: onTogglePin) {
+                            Image(systemName: item.isPinned ? "pin.fill" : "pin")
+                                .glassIcon(.orange, filled: item.isPinned)
                         }
                         .buttonStyle(.plain)
-                        .help("Copy image file path")
-                    }
+                        .help(item.isPinned ? "Unpin" : "Pin")
 
-                    Button(action: onTogglePin) {
-                        Image(systemName: item.isPinned ? "pin.fill" : "pin")
-                            .font(.system(size: 11))
-                            .foregroundStyle(item.isPinned ? .white : .secondary)
-                            .frame(width: 22, height: 22)
-                            .background(item.isPinned ? Color.orange : Color.clear, in: Circle())
+                        Button(action: onDelete) {
+                            Image(systemName: "trash")
+                                .glassIcon(.red)
+                        }
+                        .buttonStyle(.plain)
+                        .help("Delete")
                     }
-                    .buttonStyle(.plain)
-                    .help(item.isPinned ? "Unpin" : "Pin")
-
-                    Button(action: onDelete) {
-                        Image(systemName: "trash")
-                            .font(.system(size: 12))
-                            .foregroundStyle(.red.opacity(0.7))
-                    }
-                    .buttonStyle(.plain)
-                    .help("Delete")
                 }
             }
 
@@ -159,15 +177,11 @@ struct ClipboardTileView: View {
             }
         }
         .padding(12)
-        .background(
-            RoundedRectangle(cornerRadius: 12)
-                .fill(isHovered ? tileColor.opacity(0.13) : tileColor.opacity(0.06))
-                .shadow(color: .black.opacity(0.08), radius: 4, y: 2)
-        )
-        .overlay(
-            RoundedRectangle(cornerRadius: 12)
-                .stroke(item.isPinned ? Color.orange.opacity(0.5) : tileColor.opacity(0.15), lineWidth: 1)
-        )
+        .glassPanel(tint: tileColor,
+                    tintOpacity: isHovered ? 0.20 : 0.10,
+                    rim: item.isPinned ? Color.orange.opacity(0.7) : Color.white.opacity(isHovered ? 0.30 : 0.18))
+        .scaleEffect(isHovered ? 1.01 : 1)
+        .animation(.spring(duration: 0.25), value: isHovered)
         .onHover { isHovered = $0 }
     }
 

@@ -12,8 +12,6 @@ struct AddTextView: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            Divider()
-
             VStack(alignment: .leading, spacing: 10) {
                 // Label
                 HStack(spacing: 6) {
@@ -50,9 +48,9 @@ struct AddTextView: View {
                         .padding(4)
                 }
                 .background(
-                    RoundedRectangle(cornerRadius: 8)
-                        .fill(Color.accentColor.opacity(0.05))
-                        .stroke(Color.accentColor.opacity(focused ? 0.35 : 0.12), lineWidth: 1)
+                    RoundedRectangle(cornerRadius: 10, style: .continuous)
+                        .fill(Color.primary.opacity(0.04))
+                        .stroke(Color.accentColor.opacity(focused ? 0.45 : 0.15), lineWidth: 1)
                 )
 
                 // Actions
@@ -62,9 +60,8 @@ struct AddTextView: View {
                         text = ""
                         withAnimation(.spring(duration: 0.3)) { isShowing = false }
                     }
-                    .buttonStyle(.plain)
-                    .foregroundStyle(.secondary)
-                    .font(.callout)
+                    .buttonStyle(.glass)
+                    .controlSize(.small)
                     .padding(.trailing, 4)
 
                     Button("Add to History") {
@@ -72,16 +69,15 @@ struct AddTextView: View {
                         text = ""
                         withAnimation(.spring(duration: 0.3)) { isShowing = false }
                     }
-                    .buttonStyle(.borderedProminent)
+                    .buttonStyle(.glassProminent)
+                    .tint(.green)
                     .controlSize(.small)
                     .disabled(trimmed.isEmpty)
                     .keyboardShortcut(.return, modifiers: .command)
                 }
             }
-            .padding(.horizontal, 16)
-            .padding(.top, 12)
-            .padding(.bottom, 14)
-            .background(Color(nsColor: .windowBackgroundColor))
+            .padding(14)
+            .glassPanel(tint: .accentColor, tintOpacity: 0.06, cornerRadius: 20)
         }
         .onAppear { focused = true }
     }
