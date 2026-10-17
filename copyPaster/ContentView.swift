@@ -13,6 +13,10 @@ struct ContentView: View {
     @State private var selectedFilter: ClipboardFilter = .all
     @State private var showClearConfirmation = false
     @State private var showAddText = false
+    @AppStorage(AppAppearance.storageKey) private var appearance: AppAppearance = .auto
+    @AppStorage("keepOnTop") private var keepOnTop = false
+    @State private var hostWindow: NSWindow?
+    @State private var defaultWindowLevel: NSWindow.Level?
 
     private var filteredItems: [ClipboardItem] {
         var result = manager.items
@@ -47,13 +51,6 @@ struct ContentView: View {
 
     var body: some View {
         ZStack(alignment: .top) {
-            // Soft color wash behind everything so the glass has something to refract.
-            LinearGradient(
-                colors: [Color.indigo.opacity(0.16), Color.teal.opacity(0.08), Color.orange.opacity(0.10)],
-                startPoint: .topLeading, endPoint: .bottomTrailing
-            )
-            .ignoresSafeArea()
-
             VStack(spacing: 10) {
                 header
                 searchField
@@ -119,6 +116,10 @@ struct ContentView: View {
             }
         }
         .frame(minWidth: 360, minHeight: 480)
+        .onChange(of: appearance) { _, new in new.apply() }
+        .background(WindowReader(window: $hostWindow))
+        .onChange(of: hostWindow) { applyKeepOnTop() }
+        .onChange(of: keepOnTop) { applyKeepOnTop() }
     }
 
     private var header: some View {
@@ -135,13 +136,13 @@ struct ContentView: View {
                 .glassEffect(.regular, in: Capsule())
                 .help("Build \(AppVersion.build)")
             if manager.isPaused {
-                Text("Paused")
+                Label("Paused", systemImage: "pause.fill")
                     .font(.caption2)
                     .fontWeight(.semibold)
-                    .foregroundStyle(.white)
+                    .foregroundStyle(.secondary)
                     .padding(.horizontal, 7)
                     .padding(.vertical, 3)
-                    .glassEffect(.regular.tint(.orange.opacity(0.7)), in: Capsule())
+                    .glassEffect(.regular, in: Capsule())
                     .transition(.scale.combined(with: .opacity))
             }
             Spacer()
@@ -150,7 +151,7 @@ struct ContentView: View {
                 HStack(spacing: 8) {
                     Button(action: { manager.openWeblinksFile() }) {
                         Image(systemName: "link")
-                            .glassIcon(.indigo, size: 28, iconSize: 12)
+                            .glassIcon(size: 28, iconSize: 12)
                     }
                     .buttonStyle(.pressable)
                     .help("Open saved Weblinks file")
@@ -158,14 +159,14 @@ struct ContentView: View {
                     // Pause / Resume
                     Button(action: { withAnimation(.spring(duration: 0.3)) { manager.togglePause() } }) {
                         Image(systemName: manager.isPaused ? "play.fill" : "pause.fill")
-                            .glassIcon(manager.isPaused ? .orange : .mint, size: 28, iconSize: 12)
+                            .glassIcon(size: 28, iconSize: 12)
                     }
                     .buttonStyle(.pressable)
                     .help(manager.isPaused ? "Resume monitoring" : "Pause monitoring")
 
                     Button(action: { showClearConfirmation = true }) {
                         Image(systemName: "trash")
-                            .glassIcon(.red, size: 28, iconSize: 12)
+                            .glassIcon(size: 28, iconSize: 12)
                     }
                     .buttonStyle(.pressable)
                     .help("Clear all history")
@@ -175,11 +176,36 @@ struct ContentView: View {
                     } message: {
                         Text("This will delete all clipboard items. Pinned items will also be removed.")
                     }
+
+                    Button(action: { keepOnTop.toggle() }) {
+                        Image(systemName: keepOnTop ? "pin.fill" : "pin")
+                            .contentTransition(.symbolEffect(.replace))
+                            .glassIcon(keepOnTop ? .accentColor : nil, size: 28, iconSize: 12)
+                    }
+                    .buttonStyle(.pressable)
+                    .help(keepOnTop ? "Stop keeping on top" : "Keep on top")
+
+                    // Appearance: cycles Auto → Light → Dark
+                    Button(action: { appearance = appearance.next }) {
+                        Image(systemName: appearance.symbol)
+                            .contentTransition(.symbolEffect(.replace))
+                            .glassIcon(size: 28, iconSize: 12)
+                    }
+                    .buttonStyle(.pressable)
+                    .help("Appearance: \(appearance.label) — click for \(appearance.next.label)")
                 }
             }
         }
         .padding(.horizontal, 16)
         .padding(.top, 14)
+    }
+
+    /// Floats the hosting window above other apps and stops the popover closing on outside clicks.
+    private func applyKeepOnTop() {
+        AppDelegate.shared?.setKeepOnTop(keepOnTop)
+        guard let window = hostWindow else { return }
+        if defaultWindowLevel == nil { defaultWindowLevel = window.level }
+        window.level = keepOnTop ? .floating : (defaultWindowLevel ?? .normal)
     }
 
     private var searchField: some View {
@@ -201,7 +227,7 @@ struct ContentView: View {
         .padding(.horizontal, 12)
         .padding(.vertical, 9)
         .glassEffect(.regular, in: Capsule())
-        .overlay(Capsule().strokeBorder(.white.opacity(0.18), lineWidth: 1))
+        .overlay(Capsule().strokeBorder(Color(nsColor: .separatorColor), lineWidth: 1))
         .padding(.horizontal, 14)
     }
 
@@ -218,17 +244,17 @@ struct ContentView: View {
                             Text(filter.rawValue)
                             Text("\(count(for: filter))")
                                 .monospacedDigit()
-                                .foregroundStyle(selected ? Color.white.opacity(0.8) : Color.secondary)
+                                .foregroundStyle(.secondary)
                         }
                         .font(.caption)
                         .fontWeight(.semibold)
-                        .foregroundStyle(selected ? Color.white : Color.primary)
+                        .foregroundStyle(selected ? Color.primary : Color.secondary)
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, 6)
                         .contentShape(Capsule())
                     }
                     .buttonStyle(.pressable)
-                    .glassEffect(selected ? .regular.tint(Color.accentColor.opacity(0.7)).interactive() : .identity,
+                    .glassEffect(selected ? .regular.tint(Color.primary.opacity(0.08)).interactive() : .identity,
                                  in: Capsule())
                     .glassEffectID(selected ? "selection" : filter.rawValue, in: filterGlass)
                 }

@@ -14,14 +14,6 @@ struct ClipboardTileView: View {
     @State private var justCopied = false
     @State private var copyToken = 0
 
-    private var tileColor: Color {
-        switch item.contentType {
-        case .text:     return .orange
-        case .image:    return .yellow
-        case .filePath: return .green
-        }
-    }
-
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
             // Content preview
@@ -35,7 +27,7 @@ struct ClipboardTileView: View {
                     HStack(alignment: .top, spacing: 6) {
                         Image(systemName: (item.fileCount ?? 0) > 1 ? "doc.on.doc.fill" : "doc.fill")
                             .font(.system(size: 12))
-                            .foregroundStyle(.green)
+                            .foregroundStyle(.secondary)
                             .padding(.top, 2)
                         Text(item.textContent ?? "")
                             .font(.system(.body, design: .monospaced))
@@ -100,9 +92,9 @@ struct ClipboardTileView: View {
             }
         }
         .padding(12)
-        .glassPanel(tint: tileColor,
-                    tintOpacity: isHovered ? 0.20 : 0.10,
-                    rim: item.isPinned ? Color.orange.opacity(0.7) : Color.white.opacity(isHovered ? 0.30 : 0.18))
+        .glassPanel(tint: .primary,
+                    tintOpacity: isHovered ? 0.05 : 0,
+                    rim: item.isPinned ? Color.accentColor.opacity(0.6) : Color(nsColor: .separatorColor))
         .scaleEffect(isHovered ? 1.01 : 1)
         .animation(.spring(duration: 0.25), value: isHovered)
         .onHover { isHovered = $0 }
@@ -117,7 +109,7 @@ struct ClipboardTileView: View {
                             .contentTransition(.symbolEffect(.replace))
                         Text(justCopied ? "Copied" : "Copy")
                     }
-                    .glassPill(justCopied ? .green : .blue)
+                    .glassPill()
                 }
                 .buttonStyle(.pressable)
                 .help(item.contentType == .image ? "Copy image" : "Copy to clipboard")
@@ -126,7 +118,7 @@ struct ClipboardTileView: View {
                 if urls.count == 1, let url = urls.first {
                     Button { onOpenURL(url) } label: {
                         Image(systemName: "safari")
-                            .glassIcon(.teal)
+                            .glassIcon()
                     }
                     .buttonStyle(.pressable)
                     .help("Open \(url.absoluteString)")
@@ -137,7 +129,7 @@ struct ClipboardTileView: View {
                         }
                     } label: {
                         Image(systemName: "safari")
-                            .glassIcon(.teal)
+                            .glassIcon()
                     }
                     .menuStyle(.borderlessButton)
                     .menuIndicator(.hidden)
@@ -149,7 +141,7 @@ struct ClipboardTileView: View {
                 if dirs.count == 1, let dir = dirs.first {
                     Button { onOpenTerminal(dir) } label: {
                         Image(systemName: "terminal")
-                            .glassIcon(.gray)
+                            .glassIcon()
                     }
                     .buttonStyle(.pressable)
                     .help("Open Terminal in \(dir.path)")
@@ -160,7 +152,7 @@ struct ClipboardTileView: View {
                         }
                     } label: {
                         Image(systemName: "terminal")
-                            .glassIcon(.gray)
+                            .glassIcon()
                     }
                     .menuStyle(.borderlessButton)
                     .menuIndicator(.hidden)
@@ -171,7 +163,7 @@ struct ClipboardTileView: View {
                 if item.contentType == .image {
                     Button(action: onCopyPath) {
                         Image(systemName: "link")
-                            .glassIcon(.purple)
+                            .glassIcon()
                     }
                     .buttonStyle(.pressable)
                     .help("Copy image file path")
@@ -179,14 +171,14 @@ struct ClipboardTileView: View {
 
                 Button(action: onTogglePin) {
                     Image(systemName: item.isPinned ? "pin.fill" : "pin")
-                        .glassIcon(.orange, filled: item.isPinned)
+                        .glassIcon(item.isPinned ? .accentColor : nil)
                 }
                 .buttonStyle(.pressable)
                 .help(item.isPinned ? "Unpin" : "Pin")
 
                 Button(action: onDelete) {
                     Image(systemName: "trash")
-                        .glassIcon(.red)
+                        .glassIcon()
                 }
                 .buttonStyle(.pressable)
                 .help("Delete")
@@ -194,7 +186,7 @@ struct ClipboardTileView: View {
         }
     }
 
-    /// Copies, then flips the button to a green "Copied" for a moment. The token keeps a quick
+    /// Copies, then flips the button to "Copied" for a moment. The token keeps a quick
     /// second click from being cut short by the first click's reset.
     private func copyWithFeedback() {
         onCopy()

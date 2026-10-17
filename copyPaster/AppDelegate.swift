@@ -3,11 +3,16 @@ import SwiftUI
 import Carbon.HIToolbox
 
 class AppDelegate: NSObject, NSApplicationDelegate {
+    /// NSApp.delegate is SwiftUI's adaptor, not this class, so views reach the delegate through here.
+    private(set) static weak var shared: AppDelegate?
+
     private var statusItem: NSStatusItem?
     private var popover: NSPopover?
     private var eventMonitor: Any?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
+        AppDelegate.shared = self
+        AppAppearance.current.apply()
         setupMenuBar()
         registerGlobalHotkey()
     }
@@ -22,9 +27,14 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
         let popover = NSPopover()
         popover.contentSize = NSSize(width: 380, height: 520)
-        popover.behavior = .transient
+        popover.behavior = UserDefaults.standard.bool(forKey: "keepOnTop") ? .applicationDefined : .transient
         popover.contentViewController = NSHostingController(rootView: ContentView().environment(ClipboardManager.shared))
         self.popover = popover
+    }
+
+    /// Kept on top, the popover stays open when you click elsewhere and only closes from the menu bar icon or hotkey.
+    func setKeepOnTop(_ on: Bool) {
+        popover?.behavior = on ? .applicationDefined : .transient
     }
 
     @objc private func togglePopover() {

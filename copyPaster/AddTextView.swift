@@ -17,7 +17,7 @@ struct AddTextView: View {
                 HStack(spacing: 6) {
                     Image(systemName: "square.and.pencil")
                         .font(.caption)
-                        .foregroundStyle(.blue)
+                        .foregroundStyle(.secondary)
                     Text("New Snippet")
                         .font(.caption)
                         .fontWeight(.medium)
@@ -70,14 +70,13 @@ struct AddTextView: View {
                         withAnimation(.spring(duration: 0.3)) { isShowing = false }
                     }
                     .buttonStyle(.glassProminent)
-                    .tint(.green)
                     .controlSize(.small)
                     .disabled(trimmed.isEmpty)
                     .keyboardShortcut(.return, modifiers: .command)
                 }
             }
             .padding(14)
-            .glassPanel(tint: .accentColor, tintOpacity: 0.06, cornerRadius: 20)
+            .glassPanel(cornerRadius: 20)
         }
         .onAppear { focused = true }
     }

@@ -2,32 +2,33 @@ import SwiftUI
 
 extension View {
     /// Circular Liquid Glass icon used for every icon button in the app.
-    /// `filled` tints the glass with the action's color and draws a white glyph;
-    /// otherwise the glass stays clear and the glyph carries the color (used for off states).
-    /// The tint stays translucent so the refraction still reads through the color.
-    func glassIcon(_ tint: Color, size: CGFloat = 24, iconSize: CGFloat = 11, filled: Bool = true) -> some View {
+    /// Plain glass with a secondary glyph by default, like a native toolbar button.
+    /// Pass a `tint` only for primary or "on" states: the glass takes the color and the glyph turns white.
+    func glassIcon(_ tint: Color? = nil, size: CGFloat = 24, iconSize: CGFloat = 11) -> some View {
         self
             .font(.system(size: iconSize, weight: .semibold))
-            .foregroundStyle(filled ? Color.white : tint)
+            .foregroundStyle(tint == nil ? Color.secondary : Color.white)
             .frame(width: size, height: size)
             .contentShape(Circle())
-            .glassEffect(filled ? .regular.tint(tint.opacity(0.65)).interactive() : .regular.interactive(), in: Circle())
+            .glassEffect(tint.map { .regular.tint($0.opacity(0.85)).interactive() } ?? .regular.interactive(),
+                         in: Circle())
     }
 
     /// Wide capsule version of glassIcon for the primary action — about two icon buttons wide,
     /// so it's an easier target, with room for a "Copied" label.
-    func glassPill(_ tint: Color, width: CGFloat = 62, height: CGFloat = 24, iconSize: CGFloat = 11) -> some View {
+    func glassPill(_ tint: Color = .accentColor, width: CGFloat = 62, height: CGFloat = 24, iconSize: CGFloat = 11) -> some View {
         self
             .font(.system(size: iconSize, weight: .semibold))
             .foregroundStyle(Color.white)
             .frame(width: width, height: height)
             .contentShape(Capsule())
-            .glassEffect(.regular.tint(tint.opacity(0.65)).interactive(), in: Capsule())
+            .glassEffect(.regular.tint(tint.opacity(0.85)).interactive(), in: Capsule())
     }
 
-    /// Glass lens panel: faint color tint plus a hairline rim so edges stay crisp at 1x.
+    /// Glass lens panel: optional faint tint plus a hairline rim so edges stay crisp at 1x.
+    /// The default rim uses the separator color so it reads in both light and dark mode.
     func glassPanel(tint: Color = .clear, tintOpacity: Double = 0.08, cornerRadius: CGFloat = 16,
-                    rim: Color = .white.opacity(0.18)) -> some View {
+                    rim: Color = Color(nsColor: .separatorColor)) -> some View {
         let shape = RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
         return self
             .glassEffect(.regular.tint(tint.opacity(tintOpacity)), in: shape)

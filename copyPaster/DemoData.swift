@@ -30,7 +30,7 @@ enum DemoData {
     private static func sampleImagePNG() -> Data? {
         let size = NSSize(width: 480, height: 240)
         let image = NSImage(size: size, flipped: false) { rect in
-            NSGradient(colors: [.systemIndigo, .systemTeal, .systemOrange])?.draw(in: rect, angle: 20)
+            NSGradient(colors: [.systemGray, .darkGray])?.draw(in: rect, angle: 20)
             let config = NSImage.SymbolConfiguration(pointSize: 96, weight: .semibold)
                 .applying(.init(paletteColors: [.white]))
             if let symbol = NSImage(systemSymbolName: "doc.on.clipboard", accessibilityDescription: nil)?
