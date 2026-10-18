@@ -64,3 +64,31 @@ struct PasswordDetectorTests {
         #expect(item.isMasked)
     }
 }
+
+struct PasswordExpiryTests {
+    private func item(_ text: String, hoursAgo: Double, pinned: Bool = false, flag: PasswordFlag? = nil) -> ClipboardItem {
+        var item = ClipboardItem(id: UUID(), contentType: .text, textContent: text, imageData: nil,
+                                 timestamp: Date(timeIntervalSince1970: 1_800_000_000 - hoursAgo * 3600),
+                                 isPinned: pinned, passwordFlag: flag)
+        item.detectPassword()
+        return item
+    }
+
+    @Test func onlyUnpinnedPasswordsExpire() {
+        let lifetime = 24
+        let now = Date(timeIntervalSince1970: 1_800_000_000)
+        let oldPassword = item("Password1!", hoursAgo: 25)
+        let freshPassword = item("Password1!", hoursAgo: 23)
+        let pinnedPassword = item("Password1!", hoursAgo: 25, pinned: true)
+        let oldText = item("just some old notes", hoursAgo: 500)
+        let cleared = item("Password1!", hoursAgo: 25, flag: .userCleared)
+
+        func expired(_ i: ClipboardItem) -> Bool { i.passwordExpiry(lifetimeHours: lifetime).map { $0 < now } ?? false }
+        #expect(expired(oldPassword))
+        #expect(!expired(freshPassword))
+        #expect(!expired(pinnedPassword))
+        #expect(!expired(oldText))
+        #expect(!expired(cleared))
+        #expect(oldPassword.passwordExpiry(lifetimeHours: 0) == nil)
+    }
+}

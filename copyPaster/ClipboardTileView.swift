@@ -16,6 +16,8 @@ struct ClipboardTileView: View {
     @State private var copyToken = 0
     /// True only while the eye button is held down.
     @State private var isRevealing = false
+    @AppStorage(ClipboardManager.passwordLifetimeKey)
+    private var passwordLifetimeHours = ClipboardManager.defaultPasswordLifetimeHours
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
@@ -138,7 +140,12 @@ struct ClipboardTileView: View {
             .padding(.horizontal, 6)
             .padding(.vertical, 2)
             .background(Capsule().fill(Color.orange.opacity(0.15)))
-            .help(item.passwordHelp)
+            .help(badgeHelp)
+    }
+
+    private var badgeHelp: String {
+        guard let expiry = item.passwordExpiry(lifetimeHours: passwordLifetimeHours) else { return item.passwordHelp }
+        return "\(item.passwordHelp)\nDeleted automatically \(expiry.formatted(.relative(presentation: .named)))"
     }
 
     private var actions: some View {

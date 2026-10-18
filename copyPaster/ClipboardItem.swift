@@ -49,6 +49,12 @@ struct ClipboardItem: Identifiable, Codable, Equatable {
         passwordFlag == .detected ? "Likely" : "Secret"
     }
 
+    /// When the item will be deleted, or nil if it won't. lifetimeHours 0 means never.
+    func passwordExpiry(lifetimeHours: Int) -> Date? {
+        guard isMasked, !isPinned, lifetimeHours > 0 else { return nil }
+        return timestamp.addingTimeInterval(Double(lifetimeHours) * 3600)
+    }
+
     var passwordHelp: String {
         switch passwordFlag {
         case .concealed: return "Password — marked secret by a password manager"

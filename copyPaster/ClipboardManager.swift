@@ -14,6 +14,7 @@ class ClipboardManager {
     var isPaused = false
 
     private var timer: Timer?
+    private var expiryTimer: Timer?
     private var activityToken: NSObjectProtocol?
     private var lastChangeCount: Int = 0
     private let maxItems = 500
@@ -68,6 +69,7 @@ class ClipboardManager {
             reason: "Clipboard monitoring"
         )
         startMonitoring()
+        startPasswordExpiry()
     }
 
     func startMonitoring() {
@@ -441,6 +443,37 @@ class ClipboardManager {
         if let idx = items.firstIndex(where: { $0.id == item.id }) {
             items[idx].isPinned.toggle()
             sortItems()
+            saveItems()
+        }
+    }
+
+    // MARK: - Password expiry
+
+    /// Settings choice, in hours; 0 keeps passwords until deleted by hand.
+    static let passwordLifetimeKey = "passwordLifetimeHours"
+    static let defaultPasswordLifetimeHours = 24
+
+    var passwordLifetimeHours: Int {
+        UserDefaults.standard.object(forKey: Self.passwordLifetimeKey) as? Int ?? Self.defaultPasswordLifetimeHours
+    }
+
+    private func startPasswordExpiry() {
+        removeExpiredPasswords()
+        let timer = Timer(timeInterval: 60, repeats: true) { [weak self] _ in
+            Task { @MainActor in self?.removeExpiredPasswords() }
+        }
+        RunLoop.main.add(timer, forMode: .common)
+        expiryTimer = timer
+    }
+
+    /// Deletes masked items last copied longer ago than the lifetime. Pinned items are kept:
+    /// pinning is an explicit choice to keep something. Other text never expires.
+    func removeExpiredPasswords(now: Date = Date()) {
+        let hours = passwordLifetimeHours
+        guard hours > 0 else { return }
+        let before = items.count
+        items.removeAll { $0.passwordExpiry(lifetimeHours: hours).map { $0 < now } ?? false }
+        if items.count != before {
             saveItems()
         }
     }
