@@ -20,6 +20,7 @@ A native macOS clipboard manager with a Liquid Glass interface. CopyPaster lives
 - **Snippets** — type text into the compose panel to add it to your history without copying it first.
 - **Pause monitoring** — stop recording temporarily while you copy something sensitive.
 - **Launch at Login** — toggle it in Settings (⌘,).
+- **Encrypted history** — saved history is encrypted with AES-256-GCM, so copied passwords never sit on disk in plain text. The key lives in your login Keychain. History saved by older versions is encrypted automatically on first launch.
 - **Private by design** — no network access, no analytics; everything stays on your Mac.
 
 ## Requirements
@@ -115,7 +116,10 @@ Tell the user to finish these steps themselves — an agent cannot click through
 cd copyPaster && git pull
 ```
 
-Then repeat steps 3–5. Ad-hoc signed builds get a new signature each time, so macOS may drop the Accessibility permission after an update. If ⌘⇧V stops working, ask the user to remove copyPaster from the Accessibility list with the **−** button and add it again.
+Then repeat steps 3–5. Ad-hoc signed builds get a new signature each time, which has two effects the user must handle (**user action**):
+
+- macOS may drop the Accessibility permission. If ⌘⇧V stops working, remove copyPaster from the Accessibility list with the **−** button and add it again.
+- On first launch after the update, macOS asks whether copyPaster may use the "CopyPaster history key" in the login Keychain. Click **Always Allow** (it may ask for the login password). **Deny** keeps the history file untouched but nothing is saved that session.
 
 ### Uninstall
 
@@ -124,6 +128,7 @@ pkill -x copyPaster 2>/dev/null
 rm -rf /Applications/copyPaster.app
 rm -rf ~/Library/Application\ Support/copyPaster        # clipboard history
 defaults delete vish.copyPaster 2>/dev/null              # settings
+security delete-generic-password -s vish.copyPaster      # history encryption key
 ```
 
 `~/Documents/Weblinks.html` and saved images in `~/Pictures/Screenshots` belong to the user — leave them unless they ask you to delete them.
@@ -137,15 +142,21 @@ defaults delete vish.copyPaster 2>/dev/null              # settings
 | `requires a development team` | The signing overrides in step 3 were left out. Re-run the exact build command. |
 | `You have not agreed to the Xcode license agreements` | Run `sudo xcodebuild -license accept` (**user action**). |
 | Menu bar icon missing | On a crowded menu bar it can be hidden behind the notch. Use the main window or press ⌘⇧V once Accessibility is granted. |
+| Keychain prompt on every launch | The user clicked **Allow** instead of **Always Allow**. Ask them to click **Always Allow** next time. |
+| Toast "Keychain locked — history not saved" | Keychain access was denied or the login keychain is locked. Relaunch and allow access. The history file is kept as is. |
+| History empty after launch, `clipboard_history.enc.corrupt-…` file present | The file couldn't be decrypted (key deleted or file damaged), so it was moved aside and a new history started. Without the old key it can't be recovered. |
 | "copyPaster can't be opened" | Only happens if the app was copied from another Mac or downloaded. Build it locally as above, or run `xattr -dr com.apple.quarantine /Applications/copyPaster.app`. |
 
 ## Configuration
 
 | What | Where |
 |---|---|
-| Clipboard history | `~/Library/Application Support/copyPaster/clipboard_history.json` |
-| Saved clipboard images | `~/Pictures/Screenshots` by default |
-| Weblinks log | `~/Documents/Weblinks.html` |
+| Clipboard history (encrypted, owner-only `0600`) | `~/Library/Application Support/copyPaster/clipboard_history.enc` |
+| History encryption key | login Keychain, item "CopyPaster history key" (service `vish.copyPaster`) |
+| Saved clipboard images (not encrypted) | `~/Pictures/Screenshots` by default |
+| Weblinks log (not encrypted) | `~/Documents/Weblinks.html` |
+
+Only the history is encrypted. Saved images and the Weblinks log are files meant for you to open, so they stay readable. Older versions stored the history as plain `clipboard_history.json`; it is encrypted and deleted on first launch. macOS doesn't wipe the old disk blocks, so the plain copy is fully gone only once FileVault is on or the space is reused.
 
 To save clipboard images somewhere else:
 
@@ -169,6 +180,7 @@ open -n /Applications/copyPaster.app --args -demo YES
 | `ClipboardItem.swift` | Item model (text / image / file path) and link and folder detection |
 | `ContentView.swift` | Header, search, filter bar, tile list, compose button |
 | `ClipboardTileView.swift` | A single history tile and its actions |
+| `SecureStore.swift` | AES-GCM encryption, Keychain key and encrypted history file |
 | `GlassIcon.swift` | Shared Liquid Glass button and panel styles, with macOS 15 fallbacks |
 | `AddTextView.swift` | Compose panel for snippets |
 | `AppDelegate.swift` | Menu bar item, popover, ⌘⇧V hotkey |

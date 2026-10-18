@@ -17,7 +17,8 @@ class ClipboardManager {
     private var activityToken: NSObjectProtocol?
     private var lastChangeCount: Int = 0
     private let maxItems = 500
-    private let storageURL: URL
+    /// nil in demo mode, under tests, or when the Keychain refused the key — history then stays in memory only.
+    private var store: HistoryStore?
 
     /// Where clipboard images (screenshots snapped with Cmd-Ctrl-Shift-4) get written.
     static let defaultImageDirectory = FileManager.default.homeDirectoryForCurrentUser
@@ -27,6 +28,9 @@ class ClipboardManager {
     /// Launch with `-demo YES` to show sample items without reading, saving or monitoring the real
     /// clipboard — used for README screenshots.
     static let isDemo = UserDefaults.standard.bool(forKey: "demo")
+
+    /// Unit tests run inside the app; keep them away from the real history, Keychain and clipboard.
+    private static let isTesting = ProcessInfo.processInfo.environment["XCTestConfigurationFilePath"] != nil
 
     var imageSaveDirectory: URL {
         get {
@@ -41,13 +45,21 @@ class ClipboardManager {
     private init() {
         let appSupport = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first!
         let appDir = appSupport.appendingPathComponent("copyPaster", isDirectory: true)
-        try? FileManager.default.createDirectory(at: appDir, withIntermediateDirectories: true)
-        storageURL = appDir.appendingPathComponent("clipboard_history.json")
         if Self.isDemo {
             items = DemoData.items
             return
         }
-        loadItems()
+        guard !Self.isTesting else { return }
+        try? FileManager.default.createDirectory(at: appDir, withIntermediateDirectories: true,
+                                                 attributes: [.posixPermissions: 0o700])
+        do {
+            let store = HistoryStore(directory: appDir, secure: SecureStore(key: try SecureStore.keychainKey()))
+            self.store = store
+            items = store.load()
+        } catch {
+            print("Clipboard history key unavailable, history won't be saved this session: \(error)")
+            triggerToast("Keychain locked — history not saved")
+        }
         lastChangeCount = NSPasteboard.general.changeCount
         // Keep App Nap from throttling the poll timer while we sit in the background
         activityToken = ProcessInfo.processInfo.beginActivity(
@@ -448,22 +460,11 @@ class ClipboardManager {
     // MARK: - Persistence
 
     private func saveItems() {
-        guard !Self.isDemo else { return }
+        guard let store else { return }
         do {
-            let data = try JSONEncoder().encode(items)
-            try data.write(to: storageURL, options: .atomic)
+            try store.save(items)
         } catch {
             print("Failed to save clipboard history: \(error)")
-        }
-    }
-
-    private func loadItems() {
-        guard FileManager.default.fileExists(atPath: storageURL.path) else { return }
-        do {
-            let data = try Data(contentsOf: storageURL)
-            items = try JSONDecoder().decode([ClipboardItem].self, from: data)
-        } catch {
-            print("Failed to load clipboard history: \(error)")
         }
     }
 }
