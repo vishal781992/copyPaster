@@ -101,7 +101,7 @@ struct ClipboardTileView: View {
     }
 
     private var actions: some View {
-        GlassEffectContainer(spacing: 6) {
+        AdaptiveGlassContainer(spacing: 6) {
             HStack(spacing: 6) {
                 Button(action: copyWithFeedback) {
                     HStack(spacing: 4) {

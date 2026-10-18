@@ -60,7 +60,7 @@ struct AddTextView: View {
                         text = ""
                         withAnimation(.spring(duration: 0.3)) { isShowing = false }
                     }
-                    .buttonStyle(.glass)
+                    .adaptiveGlassButtonStyle()
                     .controlSize(.small)
                     .padding(.trailing, 4)
 
@@ -69,7 +69,7 @@ struct AddTextView: View {
                         text = ""
                         withAnimation(.spring(duration: 0.3)) { isShowing = false }
                     }
-                    .buttonStyle(.glassProminent)
+                    .adaptiveGlassButtonStyle(prominent: true)
                     .controlSize(.small)
                     .disabled(trimmed.isEmpty)
                     .keyboardShortcut(.return, modifiers: .command)

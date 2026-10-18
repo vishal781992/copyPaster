@@ -133,7 +133,7 @@ struct ContentView: View {
                 .foregroundStyle(.secondary)
                 .padding(.horizontal, 7)
                 .padding(.vertical, 3)
-                .glassEffect(.regular, in: Capsule())
+                .adaptiveGlass(in: Capsule())
                 .help("Build \(AppVersion.build)")
             if manager.isPaused {
                 Label("Paused", systemImage: "pause.fill")
@@ -142,12 +142,12 @@ struct ContentView: View {
                     .foregroundStyle(.secondary)
                     .padding(.horizontal, 7)
                     .padding(.vertical, 3)
-                    .glassEffect(.regular, in: Capsule())
+                    .adaptiveGlass(in: Capsule())
                     .transition(.scale.combined(with: .opacity))
             }
             Spacer()
 
-            GlassEffectContainer(spacing: 8) {
+            AdaptiveGlassContainer(spacing: 8) {
                 HStack(spacing: 8) {
                     Button(action: { manager.openWeblinksFile() }) {
                         Image(systemName: "link")
@@ -226,14 +226,14 @@ struct ContentView: View {
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 9)
-        .glassEffect(.regular, in: Capsule())
+        .adaptiveGlass(in: Capsule())
         .overlay(Capsule().strokeBorder(Color(nsColor: .separatorColor), lineWidth: 1))
         .padding(.horizontal, 14)
     }
 
     /// Glass segmented control: the selected pill is one glass shape that morphs between tabs.
     private var filterBar: some View {
-        GlassEffectContainer(spacing: 4) {
+        AdaptiveGlassContainer(spacing: 4) {
             HStack(spacing: 4) {
                 ForEach(ClipboardFilter.allCases, id: \.self) { filter in
                     let selected = filter == selectedFilter
@@ -254,13 +254,11 @@ struct ContentView: View {
                         .contentShape(Capsule())
                     }
                     .buttonStyle(.pressable)
-                    .glassEffect(selected ? .regular.tint(Color.primary.opacity(0.08)).interactive() : .identity,
-                                 in: Capsule())
-                    .glassEffectID(selected ? "selection" : filter.rawValue, in: filterGlass)
+                    .adaptiveGlassSelection(selected, id: filter.rawValue, in: filterGlass)
                 }
             }
             .padding(3)
-            .glassEffect(.regular, in: Capsule())
+            .adaptiveGlass(in: Capsule())
         }
         .padding(.horizontal, 14)
     }
@@ -272,7 +270,7 @@ struct ContentView: View {
                 .font(.system(size: 32, weight: .medium))
                 .foregroundStyle(.secondary)
                 .frame(width: 72, height: 72)
-                .glassEffect(.regular, in: Circle())
+                .adaptiveGlass(in: Circle())
             Text("No items yet")
                 .font(.headline)
             Text("Copy something and it'll appear here")

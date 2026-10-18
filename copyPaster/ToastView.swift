@@ -9,6 +9,6 @@ struct ToastView: View {
             .fontWeight(.semibold)
             .padding(.horizontal, 16)
             .padding(.vertical, 8)
-            .glassEffect(.regular, in: Capsule())
+            .adaptiveGlass(in: Capsule())
     }
 }
