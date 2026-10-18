@@ -30,6 +30,8 @@ struct ContentView: View {
 
         if !searchText.isEmpty {
             result = result.filter {
+                // Masked items only match on their label, so typing can't probe the hidden text
+                $0.isMasked ? $0.passwordLabel.localizedCaseInsensitiveContains(searchText) :
                 ($0.textContent?.localizedCaseInsensitiveContains(searchText) ?? false) ||
                 ($0.imagePath?.localizedCaseInsensitiveContains(searchText) ?? false)
             }
@@ -72,7 +74,8 @@ struct ContentView: View {
                                         onDelete: { withAnimation(.easeOut(duration: 0.2)) { manager.deleteItem(item) } },
                                         onTogglePin: { withAnimation(.easeInOut(duration: 0.2)) { manager.togglePin(item) } },
                                         onOpenURL: { manager.openURL($0) },
-                                        onOpenTerminal: { manager.openTerminal(at: $0) }
+                                        onOpenTerminal: { manager.openTerminal(at: $0) },
+                                        onSetPassword: { manager.setPassword(item, isPassword: $0) }
                                     )
                                 }
                             }

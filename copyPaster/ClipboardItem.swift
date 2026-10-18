@@ -7,6 +7,18 @@ enum ClipboardContentType: String, Codable {
     case filePath
 }
 
+/// Why a text item is treated as a password. Stored, so the user's own choice survives restarts.
+enum PasswordFlag: String, Codable {
+    /// A password manager tagged the copy with org.nspasteboard.ConcealedType.
+    case concealed
+    /// PasswordDetector guessed it. Re-evaluated on load, so it isn't persisted as a decision.
+    case detected
+    /// User chose "Mark as Password".
+    case userMarked
+    /// User chose "Not a Password" — never masked again.
+    case userCleared
+}
+
 struct ClipboardItem: Identifiable, Codable, Equatable {
     let id: UUID
     var contentType: ClipboardContentType
@@ -17,6 +29,30 @@ struct ClipboardItem: Identifiable, Codable, Equatable {
     var imagePath: String? = nil
     var timestamp: Date
     var isPinned: Bool
+    var passwordFlag: PasswordFlag? = nil
+
+    /// Masked in the list and left out of search.
+    var isMasked: Bool {
+        switch passwordFlag {
+        case .concealed, .detected, .userMarked: return true
+        case .userCleared, nil:                  return false
+        }
+    }
+
+    /// First character and a fixed run of dots, so the length isn't given away.
+    var maskedPreview: String {
+        "\(textContent?.trimmingCharacters(in: .whitespacesAndNewlines).first.map(String.init) ?? "")••••••••"
+    }
+
+    var passwordLabel: String {
+        passwordFlag == .detected ? "Might be password" : "Password"
+    }
+
+    /// Runs the guess for text items the user hasn't decided on. Called on capture and on load.
+    mutating func detectPassword() {
+        guard contentType == .text, passwordFlag == nil || passwordFlag == .detected else { return }
+        passwordFlag = PasswordDetector.isLikelySecret(textContent ?? "") ? .detected : nil
+    }
 
     var characterCount: Int {
         textContent?.count ?? 0
@@ -107,6 +143,7 @@ struct ClipboardItem: Identifiable, Codable, Equatable {
         lhs.id == rhs.id &&
         lhs.isPinned == rhs.isPinned &&
         lhs.timestamp == rhs.timestamp &&
-        lhs.imagePath == rhs.imagePath
+        lhs.imagePath == rhs.imagePath &&
+        lhs.passwordFlag == rhs.passwordFlag
     }
 }

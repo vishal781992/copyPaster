@@ -9,16 +9,24 @@ struct ClipboardTileView: View {
     let onTogglePin: () -> Void
     let onOpenURL: (URL) -> Void
     let onOpenTerminal: (URL) -> Void
+    let onSetPassword: (Bool) -> Void
 
     @State private var isHovered = false
     @State private var justCopied = false
     @State private var copyToken = 0
+    /// True only while the eye button is held down.
+    @State private var isRevealing = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
             // Content preview
             Group {
-                if item.contentType == .text {
+                if item.isMasked && !isRevealing {
+                    Text(item.maskedPreview)
+                        .font(.system(.body, design: .monospaced))
+                        .foregroundStyle(.secondary)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                } else if item.contentType == .text {
                     Text(item.textContent ?? "")
                         .font(.system(.body, design: .monospaced))
                         .lineLimit(3)
@@ -50,6 +58,12 @@ struct ClipboardTileView: View {
             // Metadata on the left, actions on the right — keeps short items compact
             HStack(spacing: 4) {
                 switch item.contentType {
+                case .text where item.isMasked:
+                    // Badge instead of the character count, which would give away the length
+                    Label(item.passwordLabel, systemImage: "lock.fill")
+                        .font(.caption2)
+                        .fontWeight(.semibold)
+                        .foregroundStyle(.orange)
                 case .text:
                     Text("\(item.characterCount) chars")
                         .font(.caption2)
@@ -98,6 +112,15 @@ struct ClipboardTileView: View {
         .scaleEffect(isHovered ? 1.01 : 1)
         .animation(.spring(duration: 0.25), value: isHovered)
         .onHover { isHovered = $0 }
+        .contextMenu {
+            if item.contentType == .text {
+                if item.isMasked {
+                    Button("Not a Password") { onSetPassword(false) }
+                } else {
+                    Button("Mark as Password") { onSetPassword(true) }
+                }
+            }
+        }
     }
 
     private var actions: some View {
@@ -114,7 +137,17 @@ struct ClipboardTileView: View {
                 .buttonStyle(.pressable)
                 .help(item.contentType == .image ? "Copy image" : "Copy to clipboard")
 
-                let urls = item.webURLs
+                if item.isMasked {
+                    // Hold to reveal: the text hides again as soon as the mouse is released
+                    Image(systemName: isRevealing ? "eye.fill" : "eye")
+                        .glassIcon(isRevealing ? .orange : nil)
+                        .onLongPressGesture(minimumDuration: .infinity, perform: {}) { pressing in
+                            isRevealing = pressing
+                        }
+                        .help("Hold to reveal")
+                }
+
+                let urls = item.isMasked ? [] : item.webURLs
                 if urls.count == 1, let url = urls.first {
                     Button { onOpenURL(url) } label: {
                         Image(systemName: "safari")
@@ -137,7 +170,7 @@ struct ClipboardTileView: View {
                     .help("Open a link (\(urls.count) found)")
                 }
 
-                let dirs = item.terminalDirectories
+                let dirs = item.isMasked ? [] : item.terminalDirectories
                 if dirs.count == 1, let dir = dirs.first {
                     Button { onOpenTerminal(dir) } label: {
                         Image(systemName: "terminal")

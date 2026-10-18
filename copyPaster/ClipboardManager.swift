@@ -46,7 +46,7 @@ class ClipboardManager {
         let appSupport = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first!
         let appDir = appSupport.appendingPathComponent("copyPaster", isDirectory: true)
         if Self.isDemo {
-            items = DemoData.items
+            items = DemoData.items.map { var item = $0; item.detectPassword(); return item }
             return
         }
         guard !Self.isTesting else { return }
@@ -55,7 +55,8 @@ class ClipboardManager {
         do {
             let store = HistoryStore(directory: appDir, secure: SecureStore(key: try SecureStore.keychainKey()))
             self.store = store
-            items = store.load()
+            // Re-run the password guess so items saved by older versions get masked too
+            items = store.load().map { var item = $0; item.detectPassword(); return item }
         } catch {
             print("Clipboard history key unavailable, history won't be saved this session: \(error)")
             triggerToast("Keychain locked — history not saved")
@@ -149,24 +150,39 @@ class ClipboardManager {
                               imageData: nil, timestamp: Date(), isPinned: false))
     }
 
+    /// Password managers (LastPass, 1Password, Bitwarden…) tag copied secrets with this type — see nspasteboard.org.
+    static let concealedType = NSPasteboard.PasteboardType("org.nspasteboard.ConcealedType")
+
     private func captureText(from pasteboard: NSPasteboard) {
         // Grab any text type and strip to plain text
         guard let text = pasteboard.string(forType: .string), !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return }
+        let concealed = pasteboard.types?.contains(Self.concealedType) ?? false
 
-        recordWeblinks(in: text)
+        if !concealed {
+            recordWeblinks(in: text)
+        }
 
         // Duplicate detection: if last non-pinned item has same text, just update timestamp
         if let idx = items.firstIndex(where: { !$0.isPinned && $0.contentType == .text && $0.textContent == text }) {
             items[idx].timestamp = Date()
+            if concealed && items[idx].passwordFlag != .userCleared {
+                items[idx].passwordFlag = .concealed
+            }
             sortItems()
             saveItems()
             return
         }
 
-        addItem(ClipboardItem(
+        var item = ClipboardItem(
             id: UUID(), contentType: .text, textContent: text,
             imageData: nil, timestamp: Date(), isPinned: false
-        ))
+        )
+        if concealed {
+            item.passwordFlag = .concealed
+        } else {
+            item.detectPassword()
+        }
+        addItem(item)
     }
 
     private func addItem(_ item: ClipboardItem) {
@@ -174,7 +190,7 @@ class ClipboardManager {
         enforceLimit()
         saveItems()
         switch item.contentType {
-        case .text:     triggerToast("Text captured")
+        case .text:     triggerToast(item.isMasked ? "Password captured (hidden)" : "Text captured")
         case .image:    triggerToast(item.imagePath != nil ? "Image saved" : "Image captured")
         case .filePath: triggerToast("Path captured")
         }
@@ -204,6 +220,10 @@ class ClipboardManager {
         case .text, .filePath:
             if let text = item.textContent {
                 pasteboard.setString(text, forType: .string)
+                // Pass the concealed tag on so other clipboard tools also treat it as a secret
+                if item.isMasked {
+                    pasteboard.setData(Data(), forType: Self.concealedType)
+                }
             }
         case .image:
             if let data = item.imageData, let image = NSImage(data: data) {
@@ -425,6 +445,13 @@ class ClipboardManager {
         }
     }
 
+    /// "Mark as Password" / "Not a Password" from the tile's context menu.
+    func setPassword(_ item: ClipboardItem, isPassword: Bool) {
+        guard let idx = items.firstIndex(where: { $0.id == item.id }) else { return }
+        items[idx].passwordFlag = isPassword ? .userMarked : .userCleared
+        saveItems()
+    }
+
     func clearAll() {
         items.removeAll()
         saveItems()
@@ -440,8 +467,9 @@ class ClipboardManager {
             triggerToast("Already in history")
             return
         }
-        let item = ClipboardItem(id: UUID(), contentType: .text, textContent: trimmed,
+        var item = ClipboardItem(id: UUID(), contentType: .text, textContent: trimmed,
                                  imageData: nil, timestamp: Date(), isPinned: false)
+        item.detectPassword()
         items.append(item)
         enforceLimit()
         saveItems()
