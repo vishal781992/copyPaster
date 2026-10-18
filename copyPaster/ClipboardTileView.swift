@@ -21,11 +21,15 @@ struct ClipboardTileView: View {
         VStack(alignment: .leading, spacing: 10) {
             // Content preview
             Group {
-                if item.isMasked && !isRevealing {
-                    Text(item.maskedPreview)
-                        .font(.system(.body, design: .monospaced))
-                        .foregroundStyle(.secondary)
-                        .frame(maxWidth: .infinity, alignment: .leading)
+                if item.isMasked {
+                    HStack(alignment: .firstTextBaseline, spacing: 8) {
+                        Text(isRevealing ? (item.textContent ?? "") : item.maskedPreview)
+                            .font(.system(.body, design: .monospaced))
+                            .foregroundStyle(isRevealing ? .primary : .secondary)
+                            .lineLimit(3)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                        passwordBadge
+                    }
                 } else if item.contentType == .text {
                     Text(item.textContent ?? "")
                         .font(.system(.body, design: .monospaced))
@@ -59,11 +63,8 @@ struct ClipboardTileView: View {
             HStack(spacing: 4) {
                 switch item.contentType {
                 case .text where item.isMasked:
-                    // Badge instead of the character count, which would give away the length
-                    Label(item.passwordLabel, systemImage: "lock.fill")
-                        .font(.caption2)
-                        .fontWeight(.semibold)
-                        .foregroundStyle(.orange)
+                    // No character count: it would give away the length
+                    EmptyView()
                 case .text:
                     Text("\(item.characterCount) chars")
                         .font(.caption2)
@@ -95,9 +96,11 @@ struct ClipboardTileView: View {
                             .foregroundStyle(.secondary)
                     }
                 }
-                Text("·")
-                    .font(.caption2)
-                    .foregroundStyle(.tertiary)
+                if !item.isMasked {
+                    Text("·")
+                        .font(.caption2)
+                        .foregroundStyle(.tertiary)
+                }
                 Text(item.timestamp, style: .relative)
                     .font(.caption2)
                     .foregroundStyle(.tertiary)
@@ -121,6 +124,21 @@ struct ClipboardTileView: View {
                 }
             }
         }
+    }
+
+    /// Compact lock capsule in the tile's top-right corner; the tooltip spells it out.
+    private var passwordBadge: some View {
+        Label(item.passwordLabel, systemImage: "lock.fill")
+            .labelStyle(.titleAndIcon)
+            .font(.caption2)
+            .fontWeight(.semibold)
+            .foregroundStyle(.orange)
+            .lineLimit(1)
+            .fixedSize()
+            .padding(.horizontal, 6)
+            .padding(.vertical, 2)
+            .background(Capsule().fill(Color.orange.opacity(0.15)))
+            .help(item.passwordHelp)
     }
 
     private var actions: some View {

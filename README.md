@@ -18,7 +18,7 @@ A native macOS clipboard manager with a Liquid Glass interface. CopyPaster lives
 - **Drag images out** — drag an image tile straight into Finder, Mail, Slack or any other app.
 - **Screenshots to disk** — images that only exist on the clipboard (like ⌘⌃⇧4 screenshots) are saved to a folder so you can reveal or copy their path.
 - **Snippets** — type text into the compose panel to add it to your history without copying it first.
-- **Password masking** — passwords are shown as `A••••••••` with a lock badge. Copies tagged as secret by password managers (LastPass, 1Password, Bitwarden) are labelled **Password**; text that looks like a password or API key is labelled **Might be password**. Hold the eye button to reveal, right-click to mark or unmark. Masked items don't match searches on their hidden text, and aren't added to the Weblinks log when they come from a password manager.
+- **Password masking** — passwords are shown as `A••••••••` with a lock badge in the corner. Copies tagged as secret by password managers (LastPass, 1Password, Bitwarden) show 🔒 **Secret**; text that looks like a password or API key shows 🔒 **Likely**. Hold the eye button to reveal, right-click to mark or unmark. Masked items don't match searches on their hidden text, and aren't added to the Weblinks log when they come from a password manager.
 - **Pause monitoring** — stop recording temporarily while you copy something sensitive.
 - **Launch at Login** — toggle it in Settings (⌘,).
 - **Encrypted history** — saved history is encrypted with AES-256-GCM, so copied passwords never sit on disk in plain text. The key lives in your login Keychain. History saved by older versions is encrypted automatically on first launch.

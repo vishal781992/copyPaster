@@ -31,7 +31,7 @@ struct ContentView: View {
         if !searchText.isEmpty {
             result = result.filter {
                 // Masked items only match on their label, so typing can't probe the hidden text
-                $0.isMasked ? $0.passwordLabel.localizedCaseInsensitiveContains(searchText) :
+                $0.isMasked ? "password \($0.passwordLabel)".localizedCaseInsensitiveContains(searchText) :
                 ($0.textContent?.localizedCaseInsensitiveContains(searchText) ?? false) ||
                 ($0.imagePath?.localizedCaseInsensitiveContains(searchText) ?? false)
             }

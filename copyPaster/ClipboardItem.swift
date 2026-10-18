@@ -44,8 +44,17 @@ struct ClipboardItem: Identifiable, Codable, Equatable {
         "\(textContent?.trimmingCharacters(in: .whitespacesAndNewlines).first.map(String.init) ?? "")••••••••"
     }
 
+    /// Short badge text; passwordHelp has the full wording for the tooltip.
     var passwordLabel: String {
-        passwordFlag == .detected ? "Might be password" : "Password"
+        passwordFlag == .detected ? "Likely" : "Secret"
+    }
+
+    var passwordHelp: String {
+        switch passwordFlag {
+        case .concealed: return "Password — marked secret by a password manager"
+        case .detected:  return "Might be a password — right-click if it isn't"
+        default:         return "Marked as password"
+        }
     }
 
     /// Runs the guess for text items the user hasn't decided on. Called on capture and on load.
