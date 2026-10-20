@@ -30,6 +30,21 @@ A native macOS clipboard manager with a Liquid Glass interface. CopyPaster lives
 - Full Xcode 26 or later to build (the Command Line Tools alone are not enough)
 - No Apple Developer account needed — the build is ad-hoc signed for your own Mac
 
+## Download
+
+No Xcode needed. Grab `copyPaster-<version>.zip` from the [latest release](https://github.com/vishal781992/copyPaster/releases/latest) (universal: Apple silicon and Intel), unzip it and move `copyPaster.app` to `/Applications`.
+
+The app is ad-hoc signed, not notarized, so macOS blocks the first launch with "cannot verify the developer". Clear the download flag once, then open it:
+
+```bash
+xattr -dr com.apple.quarantine /Applications/copyPaster.app
+open /Applications/copyPaster.app
+```
+
+Or open it, then go to **System Settings → Privacy & Security** and click **Open Anyway**.
+
+To publish a zip for a new version, tag the commit, create the GitHub release, then run `scripts/release.sh`.
+
 ## Build and install
 
 ```bash
