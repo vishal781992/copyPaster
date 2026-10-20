@@ -3,7 +3,17 @@
 A native macOS clipboard manager with a Liquid Glass interface. CopyPaster lives in the menu bar, remembers everything you copy — text, images and file paths — and keeps it searchable across restarts.
 
 <p align="center">
-  <img src="docs/screenshots/main.png" alt="CopyPaster window showing text, link, image and file path items" width="520">
+  <img src="docs/screenshots/main.png" alt="CopyPaster window showing text and screenshot items with filter tabs" width="520">
+</p>
+
+<p align="center">
+  <img src="docs/screenshots/menubar.png" alt="CopyPaster popover opened from the menu bar, Images tab selected" width="400">
+</p>
+
+<p align="center">
+  <img src="docs/screenshots/password.png" alt="A copied password masked with a Likely lock badge" width="470">
+  <br>
+  <img src="docs/screenshots/file-path.png" alt="A copied folder path with an Open in Terminal button" width="370">
 </p>
 
 ## Features
