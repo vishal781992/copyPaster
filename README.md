@@ -4,16 +4,26 @@ A native macOS clipboard manager with a Liquid Glass interface. CopyPaster lives
 
 <p align="center">
   <img src="docs/screenshots/main.png" alt="CopyPaster window showing text and screenshot items with filter tabs" width="520">
+  <br>
+  <em>The main window: searchable history with All / Text / Images / pwd tabs, copied text and screenshots, each with Copy, Pin and Delete.</em>
 </p>
 
 <p align="center">
   <img src="docs/screenshots/menubar.png" alt="CopyPaster popover opened from the menu bar, Images tab selected" width="400">
+  <br>
+  <em>The same view as a popover from the menu bar icon (or ⌘⇧V), filtered to Images.</em>
 </p>
 
 <p align="center">
   <img src="docs/screenshots/password.png" alt="A copied password masked with a Likely lock badge" width="470">
   <br>
+  <em>Password masking: a copied password shows only its first character with a 🔒 Likely badge. Hold the eye button to reveal it.</em>
+</p>
+
+<p align="center">
   <img src="docs/screenshots/file-path.png" alt="A copied folder path with an Open in Terminal button" width="370">
+  <br>
+  <em>A copied folder path gets an Open in Terminal button that opens Terminal in that folder.</em>
 </p>
 
 ## Features
