@@ -1,4 +1,5 @@
 import SwiftUI
+import ImageIO
 
 struct ClipboardTileView: View {
     let item: ClipboardItem
@@ -10,12 +11,15 @@ struct ClipboardTileView: View {
     let onOpenURL: (URL) -> Void
     let onOpenTerminal: (URL) -> Void
     let onSetPassword: (Bool) -> Void
+    var isRewriting: Bool = false
+    var onRewrite: ((RewriteStyle) -> Void)? = nil
 
     @State private var isHovered = false
     @State private var justCopied = false
     @State private var copyToken = 0
     /// True only while the eye button is held down.
     @State private var isRevealing = false
+    @State private var thumbnail: NSImage?
     @AppStorage(ClipboardManager.passwordLifetimeKey)
     private var passwordLifetimeHours = ClipboardManager.defaultPasswordLifetimeHours
 
@@ -25,7 +29,7 @@ struct ClipboardTileView: View {
             Group {
                 if item.isMasked {
                     HStack(alignment: .firstTextBaseline, spacing: 8) {
-                        Text(isRevealing ? (item.textContent ?? "") : item.maskedPreview)
+                        Text(isRevealing ? item.previewText : item.maskedPreview)
                             .font(.system(.body, design: .monospaced))
                             .foregroundStyle(isRevealing ? .primary : .secondary)
                             .lineLimit(3)
@@ -33,7 +37,7 @@ struct ClipboardTileView: View {
                         passwordBadge
                     }
                 } else if item.contentType == .text {
-                    Text(item.textContent ?? "")
+                    Text(item.previewText)
                         .font(.system(.body, design: .monospaced))
                         .lineLimit(3)
                         .frame(maxWidth: .infinity, alignment: .leading)
@@ -43,21 +47,30 @@ struct ClipboardTileView: View {
                             .font(.system(size: 12))
                             .foregroundStyle(.secondary)
                             .padding(.top, 2)
-                        Text(item.textContent ?? "")
+                        Text(item.previewText)
                             .font(.system(.body, design: .monospaced))
                             .lineLimit(3)
                             .foregroundStyle(.primary)
                             .frame(maxWidth: .infinity, alignment: .leading)
                     }
-                } else if let nsImage = item.nsImage {
-                    Image(nsImage: nsImage)
-                        .resizable()
-                        .aspectRatio(contentMode: .fit)
-                        .frame(maxHeight: 80)
-                        .clipShape(RoundedRectangle(cornerRadius: 6))
-                        .onDrag { imageDragProvider() }
-                        .help("Drag into another app")
-                        .frame(maxWidth: .infinity, alignment: .leading)
+                } else if item.contentType == .image {
+                    Group {
+                        if let image = thumbnail ?? ThumbnailCache.cached(item.id) {
+                            Image(nsImage: image)
+                                .resizable()
+                                .aspectRatio(contentMode: .fit)
+                                .frame(maxHeight: 80)
+                                .clipShape(RoundedRectangle(cornerRadius: 6))
+                                .onDrag { imageDragProvider() }
+                                .help("Drag into another app")
+                        } else {
+                            RoundedRectangle(cornerRadius: 6)
+                                .fill(.quaternary)
+                                .frame(width: 128, height: 80)
+                        }
+                    }
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .task(id: item.id) { thumbnail = await ThumbnailCache.load(item) }
                 }
             }
 
@@ -68,7 +81,7 @@ struct ClipboardTileView: View {
                     // No character count: it would give away the length
                     EmptyView()
                 case .text:
-                    Text("\(item.characterCount) chars")
+                    Text("\(TileDetails.of(item).characterCount) chars")
                         .font(.caption2)
                         .foregroundStyle(.secondary)
                 case .image:
@@ -106,6 +119,7 @@ struct ClipboardTileView: View {
                 Text(item.timestamp, style: .relative)
                     .font(.caption2)
                     .foregroundStyle(.tertiary)
+                    .help(imageExpiryHelp)
                 Spacer(minLength: 8)
                 actions
             }
@@ -143,8 +157,13 @@ struct ClipboardTileView: View {
             .help(badgeHelp)
     }
 
+    private var imageExpiryHelp: String {
+        guard item.contentType == .image, let expiry = item.expiry(lifetimeHours: passwordLifetimeHours) else { return "" }
+        return "Removed from history \(expiry.formatted(.relative(presentation: .named)))"
+    }
+
     private var badgeHelp: String {
-        guard let expiry = item.passwordExpiry(lifetimeHours: passwordLifetimeHours) else { return item.passwordHelp }
+        guard let expiry = item.expiry(lifetimeHours: passwordLifetimeHours) else { return item.passwordHelp }
         return "\(item.passwordHelp)\nDeleted automatically \(expiry.formatted(.relative(presentation: .named)))"
     }
 
@@ -172,7 +191,7 @@ struct ClipboardTileView: View {
                         .help("Hold to reveal")
                 }
 
-                let urls = item.isMasked ? [] : item.webURLs
+                let urls = item.isMasked ? [] : TileDetails.of(item).webURLs
                 if urls.count == 1, let url = urls.first {
                     Button { onOpenURL(url) } label: {
                         Image(systemName: "safari")
@@ -195,7 +214,7 @@ struct ClipboardTileView: View {
                     .help("Open a link (\(urls.count) found)")
                 }
 
-                let dirs = item.isMasked ? [] : item.terminalDirectories
+                let dirs = item.isMasked ? [] : TileDetails.of(item).terminalDirectories
                 if dirs.count == 1, let dir = dirs.first {
                     Button { onOpenTerminal(dir) } label: {
                         Image(systemName: "terminal")
@@ -225,6 +244,30 @@ struct ClipboardTileView: View {
                     }
                     .buttonStyle(.pressable)
                     .help("Copy image file path")
+                }
+
+                if let onRewrite, TileDetails.of(item).isRewritable {
+                    if isRewriting {
+                        ProgressView()
+                            .controlSize(.small)
+                            .glassIcon()
+                            .help("Rewriting with Claude…")
+                    } else {
+                        Menu {
+                            ForEach(RewriteStyle.allCases) { style in
+                                Button { onRewrite(style) } label: {
+                                    Label(style.label, systemImage: style.symbol)
+                                }
+                            }
+                        } label: {
+                            Image(systemName: "wand.and.stars")
+                                .glassIcon()
+                        }
+                        .menuStyle(.borderlessButton)
+                        .menuIndicator(.hidden)
+                        .fixedSize()
+                        .help("Rewrite professionally with Claude")
+                    }
                 }
 
                 Button(action: onTogglePin) {
@@ -269,5 +312,60 @@ struct ClipboardTileView: View {
             return NSItemProvider(object: image)
         }
         return NSItemProvider()
+    }
+}
+
+/// Link detection, folder checks and counting characters are too slow to repeat on every render
+/// while scrolling, so each item's results are worked out once. Text items don't change after capture.
+private struct TileDetails {
+    let characterCount: Int
+    let webURLs: [URL]
+    let terminalDirectories: [URL]
+    let isRewritable: Bool
+
+    @MainActor private static var cache: [UUID: TileDetails] = [:]
+
+    @MainActor static func of(_ item: ClipboardItem) -> TileDetails {
+        if let hit = cache[item.id] { return hit }
+        let details = TileDetails(characterCount: item.characterCount,
+                                  webURLs: item.webURLs,
+                                  terminalDirectories: item.terminalDirectories,
+                                  isRewritable: AIRewriter.isRewritable(item))
+        cache[item.id] = details
+        return details
+    }
+}
+
+/// Small previews of image items. Decoding a full-size screenshot on the main thread for every
+/// render made scrolling stutter; these are downsampled once, off the main thread, and kept.
+enum ThumbnailCache {
+    private static let cache = NSCache<NSUUID, NSImage>()
+    /// Longest side in pixels — enough for the 80pt-tall preview on a Retina display.
+    private static let maxPixelSize = 720
+
+    static func cached(_ id: UUID) -> NSImage? {
+        cache.object(forKey: id as NSUUID)
+    }
+
+    static func load(_ item: ClipboardItem) async -> NSImage? {
+        if let hit = cached(item.id) { return hit }
+        guard let data = item.imageData else { return nil }
+        let size = maxPixelSize
+        let cgImage = await Task.detached(priority: .userInitiated) { downsample(data, maxPixelSize: size) }.value
+        guard let cgImage else { return nil }
+        let image = NSImage(cgImage: cgImage, size: .zero)
+        cache.setObject(image, forKey: item.id as NSUUID)
+        return image
+    }
+
+    private nonisolated static func downsample(_ data: Data, maxPixelSize: Int) -> CGImage? {
+        guard let source = CGImageSourceCreateWithData(data as CFData, [kCGImageSourceShouldCache: false] as CFDictionary) else { return nil }
+        let options: [CFString: Any] = [
+            kCGImageSourceCreateThumbnailFromImageAlways: true,
+            kCGImageSourceCreateThumbnailWithTransform: true,
+            kCGImageSourceShouldCacheImmediately: true,
+            kCGImageSourceThumbnailMaxPixelSize: maxPixelSize,
+        ]
+        return CGImageSourceCreateThumbnailAtIndex(source, 0, options as CFDictionary)
     }
 }

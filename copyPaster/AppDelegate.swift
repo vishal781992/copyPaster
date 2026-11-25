@@ -17,6 +17,10 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         registerGlobalHotkey()
     }
 
+    func applicationWillTerminate(_ notification: Notification) {
+        ClipboardManager.shared.flushPendingSave()
+    }
+
     private func setupMenuBar() {
         statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.squareLength)
         if let button = statusItem?.button {
@@ -35,6 +39,26 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     /// Kept on top, the popover stays open when you click elsewhere and only closes from the menu bar icon or hotkey.
     func setKeepOnTop(_ on: Bool) {
         popover?.behavior = on ? .applicationDefined : .transient
+    }
+
+    /// Hides the popover instantly, then snaps the full screen to the clipboard so it lands in history.
+    func takeScreenshot() {
+        guard let popover = popover else { return }
+        // Skip the fade-out so the popover is gone before the capture fires.
+        popover.animates = false
+        popover.contentViewController?.view.window?.orderOut(nil)
+        popover.performClose(nil)
+        popover.animates = true
+        // Hand focus back to the app underneath so the shot shows it as it was.
+        NSApp.hide(nil)
+
+        // One short beat for the window server to redraw without the popover.
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.04) {
+            let task = Process()
+            task.executableURL = URL(fileURLWithPath: "/usr/sbin/screencapture")
+            task.arguments = ["-c"]
+            try? task.run()
+        }
     }
 
     @objc private func togglePopover() {

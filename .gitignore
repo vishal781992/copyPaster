@@ -2,3 +2,9 @@ xcuserdata/
 .DS_Store
 DerivedData/
 build/
+
+# Secrets — the Claude API key lives in the Keychain, but never commit local key files either
+.env
+.env.*
+*.secrets
+Secrets.xcconfig

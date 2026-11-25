@@ -83,12 +83,25 @@ struct PasswordExpiryTests {
         let oldText = item("just some old notes", hoursAgo: 500)
         let cleared = item("Password1!", hoursAgo: 25, flag: .userCleared)
 
-        func expired(_ i: ClipboardItem) -> Bool { i.passwordExpiry(lifetimeHours: lifetime).map { $0 < now } ?? false }
+        func expired(_ i: ClipboardItem) -> Bool { i.expiry(lifetimeHours: lifetime).map { $0 < now } ?? false }
         #expect(expired(oldPassword))
         #expect(!expired(freshPassword))
         #expect(!expired(pinnedPassword))
         #expect(!expired(oldText))
         #expect(!expired(cleared))
-        #expect(oldPassword.passwordExpiry(lifetimeHours: 0) == nil)
+        #expect(oldPassword.expiry(lifetimeHours: 0) == nil)
+    }
+
+    @Test func unpinnedImagesExpire() {
+        let now = Date(timeIntervalSince1970: 1_800_000_000)
+        func image(hoursAgo: Double, pinned: Bool = false) -> ClipboardItem {
+            ClipboardItem(id: UUID(), contentType: .image, textContent: nil, imageData: Data(),
+                          timestamp: now.addingTimeInterval(-hoursAgo * 3600), isPinned: pinned)
+        }
+        func expired(_ i: ClipboardItem) -> Bool { i.expiry(lifetimeHours: 24).map { $0 < now } ?? false }
+        #expect(expired(image(hoursAgo: 25)))
+        #expect(!expired(image(hoursAgo: 23)))
+        #expect(!expired(image(hoursAgo: 25, pinned: true)))
+        #expect(image(hoursAgo: 25).expiry(lifetimeHours: 0) == nil)
     }
 }

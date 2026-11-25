@@ -17,6 +17,8 @@ struct ContentView: View {
     @AppStorage("keepOnTop") private var keepOnTop = false
     @State private var hostWindow: NSWindow?
     @State private var defaultWindowLevel: NSWindow.Level?
+    @State private var claudeKeyInput = ""
+    @Environment(\.openSettings) private var openSettings
 
     private var filteredItems: [ClipboardItem] {
         var result = manager.items
@@ -52,7 +54,8 @@ struct ContentView: View {
     }
 
     var body: some View {
-        ZStack(alignment: .top) {
+        let visibleItems = filteredItems
+        return ZStack(alignment: .top) {
             VStack(spacing: 10) {
                 header
                 searchField
@@ -60,12 +63,12 @@ struct ContentView: View {
 
                 // Tiles list with FAB overlay
                 ZStack(alignment: .bottomTrailing) {
-                    if filteredItems.isEmpty {
+                    if visibleItems.isEmpty {
                         emptyState
                     } else {
                         ScrollView {
                             LazyVStack(spacing: 10) {
-                                ForEach(filteredItems) { item in
+                                ForEach(visibleItems) { item in
                                     ClipboardTileView(
                                         item: item,
                                         onCopy: { manager.copyToClipboard(item) },
@@ -75,7 +78,9 @@ struct ContentView: View {
                                         onTogglePin: { withAnimation(.easeInOut(duration: 0.2)) { manager.togglePin(item) } },
                                         onOpenURL: { manager.openURL($0) },
                                         onOpenTerminal: { manager.openTerminal(at: $0) },
-                                        onSetPassword: { manager.setPassword(item, isPassword: $0) }
+                                        onSetPassword: { manager.setPassword(item, isPassword: $0) },
+                                        isRewriting: manager.rewritingItemID == item.id,
+                                        onRewrite: { manager.rewrite(item, style: $0) }
                                     )
                                 }
                             }
@@ -123,6 +128,28 @@ struct ContentView: View {
         .background(WindowReader(window: $hostWindow))
         .onChange(of: hostWindow) { applyKeepOnTop() }
         .onChange(of: keepOnTop) { applyKeepOnTop() }
+        .alert("Claude API Key Needed", isPresented: needsKeyBinding) {
+            SecureField("sk-ant-…", text: $claudeKeyInput)
+            Button("Cancel", role: .cancel) {
+                claudeKeyInput = ""
+                manager.pendingRewrite = nil
+            }
+            Button("Save & Rewrite") {
+                let pending = manager.pendingRewrite
+                manager.pendingRewrite = nil
+                if manager.saveClaudeKey(claudeKeyInput), let pending {
+                    manager.rewrite(pending.item, style: pending.style)
+                }
+                claudeKeyInput = ""
+            }
+        } message: {
+            Text("Paste your key from console.anthropic.com. It is stored in your Mac's Keychain only, never in the project files, so it won't reach GitHub. Change it later in Settings.")
+        }
+    }
+
+    private var needsKeyBinding: Binding<Bool> {
+        Binding(get: { manager.pendingRewrite != nil },
+                set: { if !$0 { manager.pendingRewrite = nil } })
     }
 
     private var header: some View {
@@ -196,6 +223,23 @@ struct ContentView: View {
                     }
                     .buttonStyle(.pressable)
                     .help("Appearance: \(appearance.label) — click for \(appearance.next.label)")
+
+                    Button(action: {
+                        NSApp.activate(ignoringOtherApps: true)
+                        openSettings()
+                    }) {
+                        Image(systemName: "gearshape")
+                            .glassIcon(size: 28, iconSize: 12)
+                    }
+                    .buttonStyle(.pressable)
+                    .help("Settings (Claude API key, login, auto-delete)")
+
+                    Button(action: { AppDelegate.shared?.takeScreenshot() }) {
+                        Image(systemName: "camera")
+                            .glassIcon(size: 28, iconSize: 12)
+                    }
+                    .buttonStyle(.pressable)
+                    .help("Take screenshot")
                 }
             }
         }

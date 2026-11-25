@@ -49,9 +49,9 @@ struct ClipboardItem: Identifiable, Codable, Equatable {
         passwordFlag == .detected ? "Likely" : "Secret"
     }
 
-    /// When the item will be deleted, or nil if it won't. lifetimeHours 0 means never.
-    func passwordExpiry(lifetimeHours: Int) -> Date? {
-        guard isMasked, !isPinned, lifetimeHours > 0 else { return nil }
+    /// When a password or image item will be deleted, or nil if it won't. lifetimeHours 0 means never.
+    func expiry(lifetimeHours: Int) -> Date? {
+        guard isMasked || contentType == .image, !isPinned, lifetimeHours > 0 else { return nil }
         return timestamp.addingTimeInterval(Double(lifetimeHours) * 3600)
     }
 
@@ -67,6 +67,14 @@ struct ClipboardItem: Identifiable, Codable, Equatable {
     mutating func detectPassword() {
         guard contentType == .text, passwordFlag == nil || passwordFlag == .detected else { return }
         passwordFlag = PasswordDetector.isLikelySecret(textContent ?? "") ? .detected : nil
+    }
+
+    /// Enough text for the 3-line tile preview. Laying out a huge paste in full made scrolling stutter.
+    var previewText: String {
+        guard let text = textContent else { return "" }
+        guard let end = text.index(text.startIndex, offsetBy: 600, limitedBy: text.endIndex),
+              end < text.endIndex else { return text }
+        return String(text[..<end])
     }
 
     var characterCount: Int {

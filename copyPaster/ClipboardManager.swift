@@ -12,6 +12,12 @@ class ClipboardManager {
     var showToast = false
     var toastMessage = ""
     var isPaused = false
+    /// Item currently being rewritten by Claude, so its tile can show a spinner.
+    var rewritingItemID: UUID?
+    /// Set when a rewrite was asked for without an API key; ContentView asks for one, then resumes.
+    var pendingRewrite: (item: ClipboardItem, style: RewriteStyle)?
+    /// Cached so tiles don't hit the Keychain on every render.
+    var hasClaudeKey = ClaudeKeyStore.load() != nil
 
     private var timer: Timer?
     private var expiryTimer: Timer?
@@ -69,7 +75,7 @@ class ClipboardManager {
             reason: "Clipboard monitoring"
         )
         startMonitoring()
-        startPasswordExpiry()
+        startExpiry()
     }
 
     func startMonitoring() {
@@ -447,9 +453,9 @@ class ClipboardManager {
         }
     }
 
-    // MARK: - Password expiry
+    // MARK: - Password & image expiry
 
-    /// Settings choice, in hours; 0 keeps passwords until deleted by hand.
+    /// Settings choice, in hours; 0 keeps passwords and images until deleted by hand.
     static let passwordLifetimeKey = "passwordLifetimeHours"
     static let defaultPasswordLifetimeHours = 24
 
@@ -457,22 +463,23 @@ class ClipboardManager {
         UserDefaults.standard.object(forKey: Self.passwordLifetimeKey) as? Int ?? Self.defaultPasswordLifetimeHours
     }
 
-    private func startPasswordExpiry() {
-        removeExpiredPasswords()
+    private func startExpiry() {
+        removeExpiredItems()
         let timer = Timer(timeInterval: 60, repeats: true) { [weak self] _ in
-            Task { @MainActor in self?.removeExpiredPasswords() }
+            Task { @MainActor in self?.removeExpiredItems() }
         }
         RunLoop.main.add(timer, forMode: .common)
         expiryTimer = timer
     }
 
-    /// Deletes masked items last copied longer ago than the lifetime. Pinned items are kept:
-    /// pinning is an explicit choice to keep something. Other text never expires.
-    func removeExpiredPasswords(now: Date = Date()) {
+    /// Deletes masked and image items last copied longer ago than the lifetime. Image files on disk
+    /// are left alone; only the history entry goes. Pinned items are kept: pinning is an explicit
+    /// choice to keep something. Other text never expires.
+    func removeExpiredItems(now: Date = Date()) {
         let hours = passwordLifetimeHours
         guard hours > 0 else { return }
         let before = items.count
-        items.removeAll { $0.passwordExpiry(lifetimeHours: hours).map { $0 < now } ?? false }
+        items.removeAll { $0.expiry(lifetimeHours: hours).map { $0 < now } ?? false }
         if items.count != before {
             saveItems()
         }
@@ -509,23 +516,110 @@ class ClipboardManager {
         triggerToast("Snippet added")
     }
 
-    private func triggerToast(_ message: String) {
+    // MARK: - AI rewrite
+
+    func saveClaudeKey(_ key: String) -> Bool {
+        let trimmed = key.trimmingCharacters(in: .whitespacesAndNewlines)
+        let saved = ClaudeKeyStore.save(trimmed)
+        hasClaudeKey = ClaudeKeyStore.load() != nil
+        if saved { forgetCopiedKey(trimmed) }
+        return saved
+    }
+
+    /// Copying the key to paste it in also captured it into history. Drop those items, and clear the
+    /// clipboard if the key is still on it, so the key only lives in the Keychain.
+    private func forgetCopiedKey(_ key: String) {
+        guard !key.isEmpty else { return }
+        let before = items.count
+        items.removeAll { $0.textContent?.trimmingCharacters(in: .whitespacesAndNewlines) == key }
+        if items.count != before { saveItems() }
+        let pasteboard = NSPasteboard.general
+        if pasteboard.string(forType: .string)?.trimmingCharacters(in: .whitespacesAndNewlines) == key {
+            pasteboard.clearContents()
+            lastChangeCount = pasteboard.changeCount
+        }
+    }
+
+    /// Last 4 characters only, for showing which key is saved.
+    var claudeKeyHint: String? {
+        guard hasClaudeKey, let key = ClaudeKeyStore.load() else { return nil }
+        return "sk-ant-…" + key.suffix(4)
+    }
+
+    func removeClaudeKey() {
+        ClaudeKeyStore.delete()
+        hasClaudeKey = false
+    }
+
+    /// Sends the item's text to Claude, then adds the result as a new item and puts it on the clipboard.
+    func rewrite(_ item: ClipboardItem, style: RewriteStyle) {
+        guard rewritingItemID == nil, let text = item.textContent else { return }
+        guard let key = ClaudeKeyStore.load() else {
+            hasClaudeKey = false
+            pendingRewrite = (item, style)
+            return
+        }
+        rewritingItemID = item.id
+        Task {
+            defer { rewritingItemID = nil }
+            do {
+                let result = try await AIRewriter(apiKey: key).rewrite(text, style: style)
+                addRewrittenText(result, style: style)
+            } catch {
+                triggerToast(error.localizedDescription, duration: 3)
+            }
+        }
+    }
+
+    private func addRewrittenText(_ text: String, style: RewriteStyle) {
+        let item = ClipboardItem(id: UUID(), contentType: .text, textContent: text,
+                                 imageData: nil, timestamp: Date(), isPinned: false)
+        items.append(item)
+        enforceLimit()
+        saveItems()
+        copyToClipboard(item)
+        triggerToast("Rewritten for \(style.shortName) — copied")
+    }
+
+    private func triggerToast(_ message: String, duration: Double = 1.5) {
         toastMessage = message
         showToast = true
         Task { @MainActor in
-            try? await Task.sleep(for: .seconds(1.5))
+            try? await Task.sleep(for: .seconds(duration))
             self.showToast = false
         }
     }
 
     // MARK: - Persistence
 
+    private let saveQueue = DispatchQueue(label: "copyPaster.history-save", qos: .utility)
+    private var pendingSave: DispatchWorkItem?
+
+    /// Encrypting and writing the whole history (images included, easily 100 MB) took long enough
+    /// to freeze scrolling, so saves run off the main thread. Bursts of changes collapse into one write.
     private func saveItems() {
         guard let store else { return }
-        do {
-            try store.save(items)
-        } catch {
-            print("Failed to save clipboard history: \(error)")
+        pendingSave?.cancel()
+        let snapshot = items
+        let work = DispatchWorkItem {
+            do {
+                try store.save(snapshot)
+            } catch {
+                print("Failed to save clipboard history: \(error)")
+            }
+        }
+        pendingSave = work
+        saveQueue.asyncAfter(deadline: .now() + 0.5, execute: work)
+    }
+
+    /// Called on quit: writes a save that is still waiting, so the last change isn't lost.
+    func flushPendingSave() {
+        guard let work = pendingSave else { return }
+        pendingSave = nil
+        saveQueue.sync {}
+        if !work.isCancelled {
+            work.cancel()
+            work.perform()
         }
     }
 }
